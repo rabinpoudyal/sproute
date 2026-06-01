@@ -146,9 +146,26 @@ struct ConfigFormView<Extra: View>: View {
                     Label("Add step", systemImage: "plus")
                 }
             }
-            Section("Run") {
-                TextField("Server command", text: $draft.serverCommand)
-                    .font(.callout.monospaced())
+            Section("Run processes") {
+                ForEach($draft.processes) { $proc in
+                    HStack {
+                        TextField("name", text: $proc.name)
+                            .frame(width: 110)
+                        TextField("command", text: $proc.command)
+                            .font(.callout.monospaced())
+                        Button(role: .destructive) {
+                            removeProcess(proc.id)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                Button {
+                    draft.processes.append(.init(name: "", command: ""))
+                } label: {
+                    Label("Add process", systemImage: "plus")
+                }
             }
         }
         .formStyle(.grouped)
@@ -222,6 +239,10 @@ struct ConfigFormView<Extra: View>: View {
 
     private func removeStep(_ id: ConfigDraft.Step.ID) {
         draft.setup.removeAll { $0.id == id }
+    }
+
+    private func removeProcess(_ id: ConfigDraft.ProcessRow.ID) {
+        draft.processes.removeAll { $0.id == id }
     }
 
     private func save() {

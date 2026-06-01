@@ -15,6 +15,11 @@ final class ConfigDraft: ObservableObject {
         var name: String
         var command: String
     }
+    struct ProcessRow: Identifiable {
+        let id = UUID()
+        var name: String
+        var command: String
+    }
 
     @Published var projectName: String
     @Published var baseDir: String
@@ -27,7 +32,7 @@ final class ConfigDraft: ObservableObject {
     @Published var dbDrop: String
     @Published var dbURL: String
     @Published var setup: [Step]
-    @Published var serverCommand: String
+    @Published var processes: [ProcessRow]
     @Published var preTeardown: String
     @Published var postTeardown: String
 
@@ -43,7 +48,7 @@ final class ConfigDraft: ObservableObject {
         dbDrop = c.database.dropCommand
         dbURL = c.database.urlTemplate
         setup = c.setup.map { Step(name: $0.name, command: $0.command) }
-        serverCommand = c.run.serverCommand
+        processes = c.run.processes.map { ProcessRow(name: $0.name, command: $0.command) }
         preTeardown = c.hooks.preTeardown ?? ""
         postTeardown = c.hooks.postTeardown ?? ""
     }
@@ -61,7 +66,7 @@ final class ConfigDraft: ObservableObject {
                     dropCommand: "dropdb --if-exists {{db_name}}",
                     urlTemplate: "postgres://localhost/{{db_name}}"),
                 setup: [],
-                run: RunConfig(serverCommand: ""),
+                run: RunConfig(serverCommand: "", processes: []),
                 hooks: HooksConfig()))
     }
 
@@ -80,9 +85,6 @@ final class ConfigDraft: ObservableObject {
             throw DraftError.notAnInt("Port upper bound")
         }
         guard lower <= upper else { throw DraftError.portRange }
-        guard !serverCommand.trimmingCharacters(in: .whitespaces).isEmpty else {
-            throw DraftError.empty("Server command")
-        }
 
         let sources =
             symlinkSources
@@ -93,6 +95,13 @@ final class ConfigDraft: ObservableObject {
             let c = row.command.trimmingCharacters(in: .whitespaces)
             guard !n.isEmpty, !c.isEmpty else { throw DraftError.incompleteStep }
             return SetupStep(name: n, command: c)
+        }
+        let procs = try processes.compactMap { row -> ProcessConfig? in
+            let n = row.name.trimmingCharacters(in: .whitespaces)
+            let c = row.command.trimmingCharacters(in: .whitespaces)
+            if n.isEmpty, c.isEmpty { return nil }  // drop fully-blank rows
+            guard !n.isEmpty, !c.isEmpty else { throw DraftError.incompleteProcess }
+            return ProcessConfig(name: n, command: c)
         }
 
         func optional(_ s: String) -> String? {
@@ -108,7 +117,7 @@ final class ConfigDraft: ObservableObject {
             database: DatabaseConfig(
                 createCommand: dbCreate, dropCommand: dbDrop, urlTemplate: dbURL),
             setup: steps,
-            run: RunConfig(serverCommand: serverCommand),
+            run: RunConfig(serverCommand: "", processes: procs),
             hooks: HooksConfig(
                 preTeardown: optional(preTeardown), postTeardown: optional(postTeardown)))
     }
@@ -119,6 +128,7 @@ enum DraftError: LocalizedError {
     case notAnInt(String)
     case portRange
     case incompleteStep
+    case incompleteProcess
 
     var errorDescription: String? {
         switch self {
@@ -126,6 +136,7 @@ enum DraftError: LocalizedError {
         case .notAnInt(let field): return "\(field) must be a whole number."
         case .portRange: return "Port lower bound must be ≤ the upper bound."
         case .incompleteStep: return "Every setup step needs both a name and a command."
+        case .incompleteProcess: return "Every run process needs both a name and a command."
         }
     }
 }
