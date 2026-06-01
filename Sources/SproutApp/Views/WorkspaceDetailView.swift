@@ -204,7 +204,16 @@ struct WorkspaceDetailView: View {
 
     private func openInEditor() {
         let url = URL(fileURLWithPath: rec.worktreePath)
-        NSWorkspace.shared.open(url)
+        // Plain `open` on a directory hands it to the default folder handler (Finder).
+        // Open it in VS Code when present, else fall back to the default handler.
+        if let app = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: "com.microsoft.VSCode")
+        {
+            NSWorkspace.shared.open(
+                [url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+        } else {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     private func openInBrowser() {
