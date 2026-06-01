@@ -165,4 +165,25 @@ public struct WorkspaceManager: Sendable {
 
         try store.remove(id: id)
     }
+
+    public func reconcile() throws -> [ReconciledWorkspace] {
+        var out: [ReconciledWorkspace] = []
+        for var record in try store.load() {
+            let alive = record.serverPID.map { checker.isAlive(pid: $0) } ?? false
+            if !alive, record.status == .running {
+                record.status = .stopped
+                record.serverPID = nil
+                try store.upsert(record)
+            }
+            let orphaned = !fs.fileExists(URL(fileURLWithPath: record.worktreePath))
+            out.append(ReconciledWorkspace(record: record, orphaned: orphaned))
+        }
+        return out
+    }
+}
+
+public struct ReconciledWorkspace: Sendable, Equatable {
+    public var record: WorkspaceRecord
+    public var orphaned: Bool   // worktree directory no longer exists
+    public var status: WorkspaceStatus { record.status }
 }

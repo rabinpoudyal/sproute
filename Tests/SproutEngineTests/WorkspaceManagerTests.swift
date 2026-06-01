@@ -133,3 +133,38 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
     #expect(cmds.contains("dropdb --if-exists shop_feature_login"))
     #expect(store.records.isEmpty)
 }
+
+@Test func reconcileMarksDeadPidStopped() throws {
+    let shell = FakeShellRunner()
+    let store = FakeStateStore()
+    let fs = FakeFileSystem(); fs.existing = ["/wt/feature_login"]
+    _ = seedRecord(into: store, pid: 900)   // pid 900 not alive
+    let mgr = makeManager(shell: shell, store: store, fs: fs, prober: FreeProber(),
+                          checker: AliveChecker(alive: []))
+    let result = try mgr.reconcile()
+    #expect(result.first?.status == .stopped)
+    #expect(store.records.first?.status == .stopped)
+    #expect(result.first?.orphaned == false)
+}
+
+@Test func reconcileKeepsRunningWhenPidAlive() throws {
+    let shell = FakeShellRunner()
+    let store = FakeStateStore()
+    let fs = FakeFileSystem(); fs.existing = ["/wt/feature_login"]
+    _ = seedRecord(into: store, pid: 900)
+    let mgr = makeManager(shell: shell, store: store, fs: fs, prober: FreeProber(),
+                          checker: AliveChecker(alive: [900]))
+    let result = try mgr.reconcile()
+    #expect(result.first?.status == .running)
+}
+
+@Test func reconcileFlagsMissingWorktreeAsOrphaned() throws {
+    let shell = FakeShellRunner()
+    let store = FakeStateStore()
+    let fs = FakeFileSystem(); fs.existing = []   // worktree gone
+    _ = seedRecord(into: store, pid: nil)
+    let mgr = makeManager(shell: shell, store: store, fs: fs, prober: FreeProber(),
+                          checker: AliveChecker(alive: []))
+    let result = try mgr.reconcile()
+    #expect(result.first?.orphaned == true)
+}
