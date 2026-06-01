@@ -218,6 +218,7 @@ final class ProjectStore: ObservableObject, Identifiable {
                 id: item.record.id, config: config,
                 repo: rootURL, push: push, force: force)
             supervisors = supervisors.filter { $0.key.branch != item.record.branch }
+            buffers = buffers.filter { $0.key.branch != item.record.branch }
             refresh()
         } catch {
             lastError = AppError(error)
