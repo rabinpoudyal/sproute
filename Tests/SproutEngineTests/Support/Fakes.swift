@@ -38,3 +38,8 @@ final class FakeFileSystem: FileSystem, @unchecked Sendable {
     func fileExists(_ url: URL) -> Bool { existing.contains(url.path) }
     func removeItem(_ url: URL) throws { removed.append(url.path) }
 }
+
+final class FakeProcessTerminator: ProcessTerminator, @unchecked Sendable {
+    private(set) var terminated: [Int32] = []
+    func terminate(pid: Int32, graceSeconds: Double) async { terminated.append(pid) }
+}
