@@ -53,6 +53,46 @@ private let sampleTOML = """
     #expect(config.hooks.preTeardown == nil)
 }
 
+@Test func parsesEmptyProcessListWhenAbsent() throws {
+    let config = try TOMLConfigLoader.parse(sampleTOML)
+    #expect(config.run.processes.isEmpty)
+}
+
+@Test func parsesAndRoundTripsMultipleProcesses() throws {
+    let toml = """
+        [project]
+        name = "shop"
+        [worktree]
+        base_dir = "/wt"
+        branch_prefix = "feature/"
+        [port]
+        lower = 4000
+        upper = 4010
+        [env]
+        symlink_sources = []
+        local_file = ".env.local"
+        [database]
+        create_command = "createdb {{db_name}}"
+        drop_command = "dropdb --if-exists {{db_name}}"
+        url_template = "postgres://localhost/{{db_name}}"
+        [run]
+        server_command = "npm run dev"
+        [[run.process]]
+        name = "server"
+        command = "bin/rails server -p {{port}}"
+        [[run.process]]
+        name = "assets"
+        command = "yarn build --watch"
+        """
+    let config = try TOMLConfigLoader.parse(toml)
+    #expect(config.run.processes.map(\.name) == ["server", "assets"])
+    #expect(config.run.processes[0].command == "bin/rails server -p {{port}}")
+
+    // Round-trips through the writer.
+    let reparsed = try TOMLConfigLoader.parse(TOMLConfigWriter.serialize(config))
+    #expect(reparsed.run.processes == config.run.processes)
+}
+
 @Test func missingRequiredKeyThrows() {
     let bad = """
         [project]

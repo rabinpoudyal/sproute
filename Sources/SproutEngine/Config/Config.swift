@@ -67,9 +67,18 @@ public struct SetupStep: Sendable, Equatable {
     public init(name: String, command: String) { self.name = name; self.command = command }
 }
 
+public struct ProcessConfig: Sendable, Equatable {
+    public var name: String
+    public var command: String  // template, long-running
+    public init(name: String, command: String) { self.name = name; self.command = command }
+}
+
 public struct RunConfig: Sendable {
-    public var serverCommand: String  // template, long-running
-    public init(serverCommand: String) { self.serverCommand = serverCommand }
+    public var serverCommand: String  // template, long-running (legacy; removed in cleanup)
+    public var processes: [ProcessConfig]
+    public init(serverCommand: String, processes: [ProcessConfig] = []) {
+        self.serverCommand = serverCommand; self.processes = processes
+    }
 }
 
 public struct HooksConfig: Sendable {

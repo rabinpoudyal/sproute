@@ -56,6 +56,19 @@ public enum TOMLConfigLoader {
             }
         }
 
+        var processes: [ProcessConfig] = []
+        if let arr = runT["process"]?.array {
+            for entry in arr {
+                guard let pt = entry.table,
+                    let name = pt["name"]?.string,
+                    let cmd = pt["command"]?.string
+                else {
+                    throw ConfigError.missingKey("run.process[].name/command")
+                }
+                processes.append(ProcessConfig(name: name, command: cmd))
+            }
+        }
+
         let hooksT = table["hooks"]?.table
         let hooks = HooksConfig(
             preTeardown: hooksT?["pre_teardown"]?.string,
@@ -77,7 +90,9 @@ public enum TOMLConfigLoader {
                 dropCommand: try str(dbT, "drop_command", "database.drop_command"),
                 urlTemplate: try str(dbT, "url_template", "database.url_template")),
             setup: steps,
-            run: RunConfig(serverCommand: try str(runT, "server_command", "run.server_command")),
+            run: RunConfig(
+                serverCommand: try str(runT, "server_command", "run.server_command"),
+                processes: processes),
             hooks: hooks)
     }
 }
