@@ -15,7 +15,11 @@ struct LogConsoleView: View {
                     Label("Pause scroll", systemImage: buffer.paused ? "pause.fill" : "pause")
                 }
                 .toggleStyle(.button)
-                Button { buffer.clear() } label: { Label("Clear", systemImage: "trash") }
+                Button {
+                    buffer.clear()
+                } label: {
+                    Label("Clear", systemImage: "trash")
+                }
                 if let onPopOut {
                     Button(action: onPopOut) {
                         Label("Pop Out", systemImage: "rectangle.portrait.and.arrow.right")
@@ -61,7 +65,8 @@ struct DetachedLogWindow: View {
     var body: some View {
         Group {
             if let target,
-               let project = app.projects.first(where: { $0.id == target.projectID }) {
+                let project = app.projects.first(where: { $0.id == target.projectID })
+            {
                 LogConsoleView(buffer: project.logBuffer(for: target.branch))
                     .navigationTitle("\(project.name) / \(target.branch)")
             } else {

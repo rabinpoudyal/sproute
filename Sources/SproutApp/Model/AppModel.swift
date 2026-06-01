@@ -36,8 +36,7 @@ final class AppModel: ObservableObject {
             return
         }
         registry.add(url.path)
-        do { try registry.save(to: SproutPaths.registryFile) }
-        catch { registryError = "\(error)" }
+        do { try registry.save(to: SproutPaths.registryFile) } catch { registryError = "\(error)" }
         loadProjects()
     }
 

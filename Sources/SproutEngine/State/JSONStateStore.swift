@@ -15,8 +15,11 @@ public final class JSONStateStore: StateStore, @unchecked Sendable {
     public func upsert(_ record: WorkspaceRecord) throws {
         try queue.sync {
             var all = try readAll()
-            if let i = all.firstIndex(where: { $0.id == record.id }) { all[i] = record }
-            else { all.append(record) }
+            if let i = all.firstIndex(where: { $0.id == record.id }) {
+                all[i] = record
+            } else {
+                all.append(record)
+            }
             try writeAll(all)
         }
     }

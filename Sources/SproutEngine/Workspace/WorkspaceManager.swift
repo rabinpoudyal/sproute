@@ -42,24 +42,31 @@ public struct WorkspaceManager: Sendable {
     let renderer: TemplateRenderer
     let shell: ShellRunner
 
-    public init(git: GitService, portAllocator: PortAllocator, database: DatabaseService,
-                envLinker: EnvLinker, fs: FileSystem, setupRunner: SetupRunner,
-                store: StateStore, checker: ProcessChecker, terminator: ProcessTerminator,
-                renderer: TemplateRenderer, shell: ShellRunner) {
+    public init(
+        git: GitService, portAllocator: PortAllocator, database: DatabaseService,
+        envLinker: EnvLinker, fs: FileSystem, setupRunner: SetupRunner,
+        store: StateStore, checker: ProcessChecker, terminator: ProcessTerminator,
+        renderer: TemplateRenderer, shell: ShellRunner
+    ) {
         self.git = git; self.portAllocator = portAllocator; self.database = database
         self.envLinker = envLinker; self.fs = fs; self.setupRunner = setupRunner
         self.store = store; self.checker = checker; self.terminator = terminator
         self.renderer = renderer; self.shell = shell
     }
 
-    private func context(config: Config, branch: String, port: Int,
-                         dbName: String, worktree: String) -> TemplateContext {
-        TemplateContext(project: config.project.name, branch: branch,
-                        port: port, dbName: dbName, worktree: worktree)
+    private func context(
+        config: Config, branch: String, port: Int,
+        dbName: String, worktree: String
+    ) -> TemplateContext {
+        TemplateContext(
+            project: config.project.name, branch: branch,
+            port: port, dbName: dbName, worktree: worktree)
     }
 
-    public func create(config: Config, repo: URL, base: String, branch: String,
-                       onLog: @escaping @Sendable (LogLine) -> Void) async throws -> WorkspaceRecord {
+    public func create(
+        config: Config, repo: URL, base: String, branch: String,
+        onLog: @escaping @Sendable (LogLine) -> Void
+    ) async throws -> WorkspaceRecord {
         let slug = TemplateContext.slugify(branch)
         // Resolve the worktree path up front. A relative `base_dir` (e.g.
         // "../worktrees") must be resolved against the repo, not the process cwd:
@@ -67,7 +74,8 @@ public struct WorkspaceManager: Sendable {
         // the cwd, so the two would disagree and EnvLinker would write into a path
         // that was never created. Anchoring to `repo` keeps every step consistent.
         let rawPath = "\(config.worktree.baseDir)/\(slug)"
-        let worktreeURL = (rawPath.hasPrefix("/")
+        let worktreeURL =
+            (rawPath.hasPrefix("/")
             ? URL(fileURLWithPath: rawPath)
             : repo.appendingPathComponent(rawPath)).standardizedFileURL
         let worktreePath = worktreeURL.path
@@ -81,17 +89,20 @@ public struct WorkspaceManager: Sendable {
             didWorktree = true
 
             let port = try portAllocator.allocate()
-            let ctx = context(config: config, branch: branch, port: port,
-                              dbName: dbName, worktree: worktreePath)
+            let ctx = context(
+                config: config, branch: branch, port: port,
+                dbName: dbName, worktree: worktreePath)
 
             try await database.create(config.database, ctx: ctx, cwd: repo)
             didDB = true
 
-            try envLinker.link(sources: config.env.symlinkSources,
-                               primaryRepo: repo, worktree: worktreeURL)
+            try envLinker.link(
+                sources: config.env.symlinkSources,
+                primaryRepo: repo, worktree: worktreeURL)
             let dbURL = database.databaseURL(config.database, ctx: ctx)
-            try envLinker.writeLocal(file: config.env.localFile, worktree: worktreeURL,
-                                     port: port, databaseURL: dbURL)
+            try envLinker.writeLocal(
+                file: config.env.localFile, worktree: worktreeURL,
+                port: port, databaseURL: dbURL)
 
             var record = WorkspaceRecord(
                 id: UUID(), branch: branch, base: base, worktreePath: worktreePath,
@@ -100,33 +111,39 @@ public struct WorkspaceManager: Sendable {
             try store.upsert(record)
 
             let childEnv = ["PORT": String(port), "DATABASE_URL": dbURL]
-            try await setupRunner.run(config.setup, ctx: ctx, cwd: worktreeURL,
-                                      env: childEnv, onLog: onLog)
+            try await setupRunner.run(
+                config.setup, ctx: ctx, cwd: worktreeURL,
+                env: childEnv, onLog: onLog)
 
             let supervisor = ServerSupervisor(shell: shell, renderer: renderer)
-            let pid = try await supervisor.start(command: config.run.serverCommand, ctx: ctx,
-                                                 cwd: worktreeURL, env: childEnv, onLog: onLog)
+            let pid = try await supervisor.start(
+                command: config.run.serverCommand, ctx: ctx,
+                cwd: worktreeURL, env: childEnv, onLog: onLog)
             record.serverPID = pid
             record.status = .running
             try store.upsert(record)
             return record
         } catch {
-            await rollback(config: config, repo: repo, worktreePath: worktreePath,
-                           dbName: dbName, branch: branch,
-                           didWorktree: didWorktree, didDB: didDB)
+            await rollback(
+                config: config, repo: repo, worktreePath: worktreePath,
+                dbName: dbName, branch: branch,
+                didWorktree: didWorktree, didDB: didDB)
             throw error
         }
     }
 
-    private func rollback(config: Config, repo: URL, worktreePath: String, dbName: String,
-                          branch: String, didWorktree: Bool, didDB: Bool) async {
+    private func rollback(
+        config: Config, repo: URL, worktreePath: String, dbName: String,
+        branch: String, didWorktree: Bool, didDB: Bool
+    ) async {
         // remove any persisted record for this branch
         if let existing = try? store.load().first(where: { $0.branch == branch }) {
             try? store.remove(id: existing.id)
         }
         if didDB {
-            let ctx = context(config: config, branch: branch, port: 0,
-                              dbName: dbName, worktree: worktreePath)
+            let ctx = context(
+                config: config, branch: branch, port: 0,
+                dbName: dbName, worktree: worktreePath)
             try? await database.drop(config.database, ctx: ctx, cwd: repo)
         }
         // Clean up the worktree directory no matter how far creation got, so a retry
@@ -145,14 +162,17 @@ public struct WorkspaceManager: Sendable {
         }
     }
 
-    public func teardown(id: UUID, config: Config, repo: URL,
-                         push: Bool, force: Bool) async throws {
+    public func teardown(
+        id: UUID, config: Config, repo: URL,
+        push: Bool, force: Bool
+    ) async throws {
         guard let record = try store.load().first(where: { $0.id == id }) else {
             throw TeardownError.workspaceNotFound(id)
         }
         let worktreeURL = URL(fileURLWithPath: record.worktreePath)
-        let ctx = context(config: config, branch: record.branch, port: record.port,
-                          dbName: record.dbName, worktree: record.worktreePath)
+        let ctx = context(
+            config: config, branch: record.branch, port: record.port,
+            dbName: record.dbName, worktree: record.worktreePath)
 
         // pre-hook
         if let pre = config.hooks.preTeardown {
@@ -203,6 +223,6 @@ public struct WorkspaceManager: Sendable {
 
 public struct ReconciledWorkspace: Sendable, Equatable {
     public var record: WorkspaceRecord
-    public var orphaned: Bool   // worktree directory no longer exists
+    public var orphaned: Bool  // worktree directory no longer exists
     public var status: WorkspaceStatus { record.status }
 }

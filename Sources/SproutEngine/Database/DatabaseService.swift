@@ -26,7 +26,8 @@ public struct DatabaseService: Sendable {
     private func runChecked(_ command: String, cwd: URL) async throws {
         let r = try await shell.run(command, cwd: cwd, env: [:])
         guard r.succeeded else {
-            throw DatabaseError.commandFailed(command: command, exitCode: r.exitCode, stderr: r.stderr)
+            throw DatabaseError.commandFailed(
+                command: command, exitCode: r.exitCode, stderr: r.stderr)
         }
     }
 }

@@ -12,9 +12,9 @@ final class LogBuffer: ObservableObject, Identifiable {
         let text: String
     }
 
-    nonisolated let id: String          // workspace branch (stable per project)
+    nonisolated let id: String  // workspace branch (stable per project)
     @Published private(set) var entries: [Entry] = []
-    @Published var paused = false       // affects autoscroll only, never drops lines
+    @Published var paused = false  // affects autoscroll only, never drops lines
 
     private let maxLines = 5000
 

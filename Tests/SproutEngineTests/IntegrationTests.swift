@@ -35,10 +35,11 @@ func realGitWorktreeAddAndRemove() async throws {
 func realProcessGroupTerminationKillsChildren() async throws {
     // Launch a shell that spawns a long-lived child; terminate must kill the group.
     let runner = LoginShellRunner()
-    let handle = try runner.launch("sleep 600", cwd: FileManager.default.temporaryDirectory, env: [:])
+    let handle = try runner.launch(
+        "sleep 600", cwd: FileManager.default.temporaryDirectory, env: [:])
     let pid = handle.pid
-    #expect(kill(pid, 0) == 0)          // alive
+    #expect(kill(pid, 0) == 0)  // alive
     await handle.terminate(graceSeconds: 1)
     try await Task.sleep(nanoseconds: 200_000_000)
-    #expect(kill(pid, 0) != 0)          // dead
+    #expect(kill(pid, 0) != 0)  // dead
 }

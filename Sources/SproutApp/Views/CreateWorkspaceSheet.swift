@@ -25,8 +25,9 @@ struct CreateWorkspaceSheet: View {
                 TextField("Base branch", text: $base)
                     .disabled(creating)
                 LabeledContent("Database", value: dbPreview)
-                LabeledContent("Port",
-                               value: "auto (\(project.config.port.lower)–\(project.config.port.upper))")
+                LabeledContent(
+                    "Port",
+                    value: "auto (\(project.config.port.lower)–\(project.config.port.upper))")
                 LabeledContent("Worktree", value: worktreePreview)
             }
             .formStyle(.grouped)

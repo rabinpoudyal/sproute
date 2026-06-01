@@ -4,8 +4,9 @@ import Foundation
 
 private let cwd = URL(fileURLWithPath: "/repo")
 private func ctx() -> TemplateContext {
-    TemplateContext(project: "shop", branch: "feature/login", port: 4001,
-                    dbName: "shop_feature_login", worktree: "/wt/login")
+    TemplateContext(
+        project: "shop", branch: "feature/login", port: 4001,
+        dbName: "shop_feature_login", worktree: "/wt/login")
 }
 
 @Test func createRendersAndRunsCommand() async throws {
@@ -24,7 +25,8 @@ private func ctx() -> TemplateContext {
 
 @Test func databaseURLRenders() {
     let db = DatabaseService(shell: FakeShellRunner(), renderer: TemplateRenderer())
-    #expect(db.databaseURL(Fixtures.config().database, ctx: ctx())
+    #expect(
+        db.databaseURL(Fixtures.config().database, ctx: ctx())
             == "postgres://localhost/shop_feature_login")
 }
 

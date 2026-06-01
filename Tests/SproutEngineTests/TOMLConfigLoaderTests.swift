@@ -3,40 +3,40 @@ import Foundation
 @testable import SproutEngine
 
 private let sampleTOML = """
-[project]
-name = "shop"
+    [project]
+    name = "shop"
 
-[worktree]
-base_dir = "/wt"
-branch_prefix = "feature/"
+    [worktree]
+    base_dir = "/wt"
+    branch_prefix = "feature/"
 
-[port]
-lower = 4000
-upper = 4010
+    [port]
+    lower = 4000
+    upper = 4010
 
-[env]
-symlink_sources = [".env"]
-local_file = ".env.local"
+    [env]
+    symlink_sources = [".env"]
+    local_file = ".env.local"
 
-[database]
-create_command = "createdb {{db_name}}"
-drop_command = "dropdb --if-exists {{db_name}}"
-url_template = "postgres://localhost/{{db_name}}"
+    [database]
+    create_command = "createdb {{db_name}}"
+    drop_command = "dropdb --if-exists {{db_name}}"
+    url_template = "postgres://localhost/{{db_name}}"
 
-[[setup]]
-name = "deps"
-command = "npm ci"
+    [[setup]]
+    name = "deps"
+    command = "npm ci"
 
-[[setup]]
-name = "migrate"
-command = "npm run migrate"
+    [[setup]]
+    name = "migrate"
+    command = "npm run migrate"
 
-[run]
-server_command = "npm run dev"
+    [run]
+    server_command = "npm run dev"
 
-[hooks]
-post_teardown = "echo bye"
-"""
+    [hooks]
+    post_teardown = "echo bye"
+    """
 
 @Test func parsesFullConfig() throws {
     let config = try TOMLConfigLoader.parse(sampleTOML)
@@ -55,8 +55,8 @@ post_teardown = "echo bye"
 
 @Test func missingRequiredKeyThrows() {
     let bad = """
-    [project]
-    name = "shop"
-    """
+        [project]
+        name = "shop"
+        """
     #expect(throws: ConfigError.self) { _ = try TOMLConfigLoader.parse(bad) }
 }

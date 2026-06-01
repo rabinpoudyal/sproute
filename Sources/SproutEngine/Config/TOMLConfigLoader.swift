@@ -9,15 +9,17 @@ public enum ConfigError: Error, Equatable {
 public enum TOMLConfigLoader {
     public static func load(path: URL) throws -> Config {
         let text: String
-        do { text = try String(contentsOf: path, encoding: .utf8) }
-        catch { throw ConfigError.parseFailed("cannot read \(path.path)") }
+        do { text = try String(contentsOf: path, encoding: .utf8) } catch {
+            throw ConfigError.parseFailed("cannot read \(path.path)")
+        }
         return try parse(text)
     }
 
     public static func parse(_ toml: String) throws -> Config {
         let table: TOMLTable
-        do { table = try TOMLTable(string: toml) }
-        catch { throw ConfigError.parseFailed("\(error)") }
+        do { table = try TOMLTable(string: toml) } catch {
+            throw ConfigError.parseFailed("\(error)")
+        }
 
         func tbl(_ key: String) throws -> TOMLTable {
             guard let t = table[key]?.table else { throw ConfigError.missingKey(key) }
@@ -45,8 +47,9 @@ public enum TOMLConfigLoader {
         if let arr = table["setup"]?.array {
             for entry in arr {
                 guard let st = entry.table,
-                      let name = st["name"]?.string,
-                      let cmd = st["command"]?.string else {
+                    let name = st["name"]?.string,
+                    let cmd = st["command"]?.string
+                else {
                     throw ConfigError.missingKey("setup[].name/command")
                 }
                 steps.append(SetupStep(name: name, command: cmd))

@@ -5,18 +5,18 @@ extension WorkspaceStatus {
     var color: Color {
         switch self {
         case .creating, .tearingDown: return .orange
-        case .running:                return .green
-        case .stopped:                return .secondary
-        case .crashed:                return .red
+        case .running: return .green
+        case .stopped: return .secondary
+        case .crashed: return .red
         }
     }
 
     var label: String {
         switch self {
-        case .creating:    return "Setting up"
-        case .running:     return "Running"
-        case .stopped:     return "Idle"
-        case .crashed:     return "Crashed"
+        case .creating: return "Setting up"
+        case .running: return "Running"
+        case .stopped: return "Idle"
+        case .crashed: return "Crashed"
         case .tearingDown: return "Tearing down"
         }
     }

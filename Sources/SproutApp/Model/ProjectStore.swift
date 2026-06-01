@@ -4,7 +4,7 @@ import SproutEngine
 /// A workspace record paired with reconcile-derived liveness info, for display.
 struct WorkspaceItem: Identifiable, Equatable {
     var record: WorkspaceRecord
-    var orphaned: Bool           // worktree directory missing on disk
+    var orphaned: Bool  // worktree directory missing on disk
     var id: UUID { record.id }
 }
 
@@ -12,7 +12,7 @@ struct WorkspaceItem: Identifiable, Equatable {
 /// (`WorkspaceManager` + friends) and exposes UI-friendly state and actions.
 @MainActor
 final class ProjectStore: ObservableObject, Identifiable {
-    nonisolated let id: String          // normalized root path
+    nonisolated let id: String  // normalized root path
     let rootURL: URL
     let config: Config
 
@@ -36,15 +36,19 @@ final class ProjectStore: ObservableObject, Identifiable {
         self.config = config
         let store = JSONStateStore(fileURL: SproutPaths.stateFile(projectName: config.project.name))
         self.store = store
-        self.manager = ProjectStore.makeManager(config: config, store: store,
-                                                 shell: shell, renderer: renderer)
+        self.manager = ProjectStore.makeManager(
+            config: config, store: store,
+            shell: shell, renderer: renderer)
     }
 
-    private static func makeManager(config: Config, store: StateStore,
-                                    shell: ShellRunner, renderer: TemplateRenderer) -> WorkspaceManager {
+    private static func makeManager(
+        config: Config, store: StateStore,
+        shell: ShellRunner, renderer: TemplateRenderer
+    ) -> WorkspaceManager {
         WorkspaceManager(
             git: GitService(shell: shell),
-            portAllocator: PortAllocator(config: config.port, store: store, prober: BindPortProber()),
+            portAllocator: PortAllocator(
+                config: config.port, store: store, prober: BindPortProber()),
             database: DatabaseService(shell: shell, renderer: renderer),
             envLinker: EnvLinker(fs: RealFileSystem()),
             fs: RealFileSystem(),
@@ -92,8 +96,9 @@ final class ProjectStore: ObservableObject, Identifiable {
     }
 
     private func context(_ rec: WorkspaceRecord) -> TemplateContext {
-        TemplateContext(project: config.project.name, branch: rec.branch,
-                        port: rec.port, dbName: rec.dbName, worktree: rec.worktreePath)
+        TemplateContext(
+            project: config.project.name, branch: rec.branch,
+            port: rec.port, dbName: rec.dbName, worktree: rec.worktreePath)
     }
 
     private func childEnv(_ rec: WorkspaceRecord) -> [String: String] {
@@ -107,8 +112,9 @@ final class ProjectStore: ObservableObject, Identifiable {
     func create(base: String, branch: String) async {
         let log = onLog(for: branch)
         do {
-            _ = try await manager.create(config: config, repo: rootURL,
-                                         base: base, branch: branch, onLog: log)
+            _ = try await manager.create(
+                config: config, repo: rootURL,
+                base: base, branch: branch, onLog: log)
             refresh()
         } catch {
             lastError = AppError(error)
@@ -123,10 +129,11 @@ final class ProjectStore: ObservableObject, Identifiable {
         }
         let sup = ServerSupervisor(shell: shell, renderer: renderer)
         do {
-            let pid = try await sup.start(command: config.run.serverCommand,
-                                          ctx: context(rec),
-                                          cwd: URL(fileURLWithPath: rec.worktreePath),
-                                          env: childEnv(rec), onLog: log)
+            let pid = try await sup.start(
+                command: config.run.serverCommand,
+                ctx: context(rec),
+                cwd: URL(fileURLWithPath: rec.worktreePath),
+                env: childEnv(rec), onLog: log)
             supervisors[rec.branch] = sup
             rec.serverPID = pid
             rec.status = .running
@@ -154,8 +161,9 @@ final class ProjectStore: ObservableObject, Identifiable {
     func push(_ item: WorkspaceItem) async {
         do {
             try await GitService(shell: shell)
-                .push(worktree: URL(fileURLWithPath: item.record.worktreePath),
-                      branch: item.record.branch)
+                .push(
+                    worktree: URL(fileURLWithPath: item.record.worktreePath),
+                    branch: item.record.branch)
         } catch {
             lastError = AppError(error)
         }
@@ -163,8 +171,9 @@ final class ProjectStore: ObservableObject, Identifiable {
 
     func teardown(_ item: WorkspaceItem, push: Bool, force: Bool) async {
         do {
-            try await manager.teardown(id: item.record.id, config: config,
-                                       repo: rootURL, push: push, force: force)
+            try await manager.teardown(
+                id: item.record.id, config: config,
+                repo: rootURL, push: push, force: force)
             supervisors[item.record.branch] = nil
             refresh()
         } catch {

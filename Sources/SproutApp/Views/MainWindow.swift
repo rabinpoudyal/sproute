@@ -14,13 +14,16 @@ struct MainWindow: View {
 
     var body: some View {
         NavigationSplitView {
-            SidebarView(selection: $selection,
-                        onAddProject: addProject,
-                        onNewWorkspace: { createForProject = $0 })
-                .frame(minWidth: 240)
+            SidebarView(
+                selection: $selection,
+                onAddProject: addProject,
+                onNewWorkspace: { createForProject = $0 }
+            )
+            .frame(minWidth: 240)
         } detail: {
-            DetailContainer(selection: selection,
-                            onNewWorkspace: { createForProject = $0 })
+            DetailContainer(
+                selection: selection,
+                onNewWorkspace: { createForProject = $0 })
         }
         .sheet(item: $createForProject) { project in
             CreateWorkspaceSheet(project: project)
@@ -81,7 +84,9 @@ struct SidebarView: View {
                             .foregroundStyle(.secondary)
                     }
                     ForEach(project.workspaces) { item in
-                        NavigationLink(value: SidebarSelection.workspace(projectID: project.id, id: item.id)) {
+                        NavigationLink(
+                            value: SidebarSelection.workspace(projectID: project.id, id: item.id)
+                        ) {
                             HStack {
                                 StatusBadge(status: item.record.status, showText: false)
                                 Text(item.record.branch)
@@ -103,7 +108,9 @@ struct SidebarView: View {
                         }
                         .buttonStyle(.plain)
                         Spacer()
-                        Button { onNewWorkspace(project) } label: {
+                        Button {
+                            onNewWorkspace(project)
+                        } label: {
                             Image(systemName: "plus")
                         }
                         .buttonStyle(.borderless)
@@ -145,7 +152,8 @@ struct DetailContainer: View {
         switch selection {
         case let .workspace(projectID, id):
             if let project = app.projects.first(where: { $0.id == projectID }),
-               let item = project.workspaces.first(where: { $0.id == id }) {
+                let item = project.workspaces.first(where: { $0.id == id })
+            {
                 WorkspaceDetailView(project: project, item: item)
             } else {
                 placeholder
@@ -162,8 +170,9 @@ struct DetailContainer: View {
     }
 
     private var placeholder: some View {
-        ContentUnavailableView("Select a Workspace",
-                               systemImage: "sidebar.left",
-                               description: Text("Pick a project or workspace from the sidebar."))
+        ContentUnavailableView(
+            "Select a Workspace",
+            systemImage: "sidebar.left",
+            description: Text("Pick a project or workspace from the sidebar."))
     }
 }

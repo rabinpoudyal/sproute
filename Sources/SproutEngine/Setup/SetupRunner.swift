@@ -12,9 +12,11 @@ public struct SetupRunner: Sendable {
     }
 
     /// Runs steps sequentially. Streams logs to `onLog`. Throws on first non-zero exit.
-    public func run(_ steps: [SetupStep], ctx: TemplateContext, cwd: URL,
-                    env: [String: String],
-                    onLog: @Sendable (LogLine) -> Void) async throws {
+    public func run(
+        _ steps: [SetupStep], ctx: TemplateContext, cwd: URL,
+        env: [String: String],
+        onLog: @Sendable (LogLine) -> Void
+    ) async throws {
         for (index, step) in steps.enumerated() {
             let command = renderer.render(step.command, ctx)
             let handle = try shell.launch(command, cwd: cwd, env: env)

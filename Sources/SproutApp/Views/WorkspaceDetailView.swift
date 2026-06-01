@@ -21,29 +21,44 @@ struct WorkspaceDetailView: View {
             Divider()
             serverBar
             Divider()
-            LogConsoleView(buffer: project.logBuffer(for: rec.branch),
-                           onPopOut: {
-                               openWindow(value: LogTarget(projectID: project.id, branch: rec.branch))
-                           })
+            LogConsoleView(
+                buffer: project.logBuffer(for: rec.branch),
+                onPopOut: {
+                    openWindow(value: LogTarget(projectID: project.id, branch: rec.branch))
+                })
         }
         .navigationTitle(rec.branch)
         .toolbar { lifecycleMenu }
-        .confirmationDialog("Tear down \(rec.branch)?",
-                            isPresented: $confirmDone, titleVisibility: .visible) {
-            Button("Push & Tear Down", role: .destructive) { run { await tearDown(push: true, force: false) } }
+        .confirmationDialog(
+            "Tear down \(rec.branch)?",
+            isPresented: $confirmDone, titleVisibility: .visible
+        ) {
+            Button("Push & Tear Down", role: .destructive) {
+                run { await tearDown(push: true, force: false) }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Pushes the branch, then removes the worktree, drops the database, and deletes the branch.")
+            Text(
+                "Pushes the branch, then removes the worktree, drops the database, and deletes the branch."
+            )
         }
-        .confirmationDialog("Discard \(rec.branch)?",
-                            isPresented: $confirmDiscard, titleVisibility: .visible) {
-            Button("Discard Permanently", role: .destructive) { run { await tearDown(push: false, force: true) } }
+        .confirmationDialog(
+            "Discard \(rec.branch)?",
+            isPresented: $confirmDiscard, titleVisibility: .visible
+        ) {
+            Button("Discard Permanently", role: .destructive) {
+                run { await tearDown(push: false, force: true) }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Destroys the worktree, database, and branch WITHOUT pushing. Unmerged commits are lost.")
+            Text(
+                "Destroys the worktree, database, and branch WITHOUT pushing. Unmerged commits are lost."
+            )
         }
         .alert("Uncommitted changes", isPresented: $dirtyWarning) {
-            Button("Force Tear Down", role: .destructive) { run { await tearDown(push: true, force: true) } }
+            Button("Force Tear Down", role: .destructive) {
+                run { await tearDown(push: true, force: true) }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This worktree has uncommitted changes. Tear down anyway?")
@@ -93,14 +108,20 @@ struct WorkspaceDetailView: View {
     private var serverBar: some View {
         HStack(spacing: 12) {
             if rec.status == .running {
-                Button { run { await project.stopServer(item) } } label: {
+                Button {
+                    run { await project.stopServer(item) }
+                } label: {
                     Label("Stop", systemImage: "stop.fill")
                 }
-                Button { run { await project.startOrRestartServer(item) } } label: {
+                Button {
+                    run { await project.startOrRestartServer(item) }
+                } label: {
                     Label("Restart", systemImage: "arrow.clockwise")
                 }
             } else {
-                Button { run { await project.startOrRestartServer(item) } } label: {
+                Button {
+                    run { await project.startOrRestartServer(item) }
+                } label: {
                     Label("Start", systemImage: "play.fill")
                 }
                 .disabled(item.orphaned)
@@ -178,7 +199,9 @@ struct ProjectOverviewView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         row("Root", project.rootURL.path)
                         row("Worktrees", project.config.worktree.baseDir)
-                        row("Port range", "\(project.config.port.lower)–\(project.config.port.upper)")
+                        row(
+                            "Port range",
+                            "\(project.config.port.lower)–\(project.config.port.upper)")
                         row("Server", project.config.run.serverCommand)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -191,8 +214,11 @@ struct ProjectOverviewView: View {
                         }
                         ForEach(project.doctor, id: \.tool) { check in
                             HStack {
-                                Image(systemName: check.found ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                    .foregroundStyle(check.found ? .green : .red)
+                                Image(
+                                    systemName: check.found
+                                        ? "checkmark.circle.fill" : "xmark.circle.fill"
+                                )
+                                .foregroundStyle(check.found ? .green : .red)
                                 Text(check.tool).bold()
                                 Text(check.path ?? "not found")
                                     .font(.caption.monospaced())

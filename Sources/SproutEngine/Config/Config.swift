@@ -10,9 +10,11 @@ public struct Config: Sendable {
     public var run: RunConfig
     public var hooks: HooksConfig
 
-    public init(project: ProjectConfig, worktree: WorktreeConfig, port: PortConfig,
-                env: EnvConfig, database: DatabaseConfig, setup: [SetupStep],
-                run: RunConfig, hooks: HooksConfig) {
+    public init(
+        project: ProjectConfig, worktree: WorktreeConfig, port: PortConfig,
+        env: EnvConfig, database: DatabaseConfig, setup: [SetupStep],
+        run: RunConfig, hooks: HooksConfig
+    ) {
         self.project = project; self.worktree = worktree; self.port = port
         self.env = env; self.database = database; self.setup = setup
         self.run = run; self.hooks = hooks
@@ -50,9 +52,9 @@ public struct EnvConfig: Sendable {
 }
 
 public struct DatabaseConfig: Sendable {
-    public var createCommand: String   // template, e.g. "createdb {{db_name}}"
-    public var dropCommand: String     // template, e.g. "dropdb --if-exists {{db_name}}"
-    public var urlTemplate: String     // e.g. "postgres://localhost/{{db_name}}"
+    public var createCommand: String  // template, e.g. "createdb {{db_name}}"
+    public var dropCommand: String  // template, e.g. "dropdb --if-exists {{db_name}}"
+    public var urlTemplate: String  // e.g. "postgres://localhost/{{db_name}}"
     public init(createCommand: String, dropCommand: String, urlTemplate: String) {
         self.createCommand = createCommand; self.dropCommand = dropCommand
         self.urlTemplate = urlTemplate
@@ -61,12 +63,12 @@ public struct DatabaseConfig: Sendable {
 
 public struct SetupStep: Sendable, Equatable {
     public var name: String
-    public var command: String          // template
+    public var command: String  // template
     public init(name: String, command: String) { self.name = name; self.command = command }
 }
 
 public struct RunConfig: Sendable {
-    public var serverCommand: String    // template, long-running
+    public var serverCommand: String  // template, long-running
     public init(serverCommand: String) { self.serverCommand = serverCommand }
 }
 

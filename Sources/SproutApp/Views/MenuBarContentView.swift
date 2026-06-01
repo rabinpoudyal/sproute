@@ -56,11 +56,15 @@ struct MenuBarRow: View {
             if busy {
                 ProgressView().controlSize(.small)
             } else if item.record.status == .running {
-                Button { toggle { await project.stopServer(item) } } label: {
+                Button {
+                    toggle { await project.stopServer(item) }
+                } label: {
                     Image(systemName: "stop.fill")
                 }
             } else {
-                Button { toggle { await project.startOrRestartServer(item) } } label: {
+                Button {
+                    toggle { await project.startOrRestartServer(item) }
+                } label: {
                     Image(systemName: "play.fill")
                 }
                 .disabled(item.orphaned)
@@ -71,6 +75,8 @@ struct MenuBarRow: View {
 
     private func toggle(_ work: @escaping () async -> Void) {
         busy = true
-        Task { await work(); busy = false }
+        Task {
+            await work(); busy = false
+        }
     }
 }

@@ -34,7 +34,7 @@ public struct ProjectRegistry: Codable, Equatable, Sendable {
 
     public static func load(from url: URL) -> ProjectRegistry {
         guard let data = try? Data(contentsOf: url),
-              let reg = try? JSONDecoder().decode(ProjectRegistry.self, from: data)
+            let reg = try? JSONDecoder().decode(ProjectRegistry.self, from: data)
         else { return ProjectRegistry() }
         return reg
     }

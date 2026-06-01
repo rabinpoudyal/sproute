@@ -26,7 +26,8 @@ import Foundation
     )
     let r = TemplateRenderer()
     #expect(r.render("{{project}}_{{branch_slug}}", ctx) == "shop_feature_add_login")
-    #expect(r.render("port={{port}} db={{db_name}}", ctx)
+    #expect(
+        r.render("port={{port}} db={{db_name}}", ctx)
             == "port=4011 db=shop_feature_add_login")
     #expect(r.render("{{worktree}}/.env", ctx) == "/wt/shop-login/.env")
     #expect(r.render("branch={{branch}}", ctx) == "branch=feature/Add-Login")

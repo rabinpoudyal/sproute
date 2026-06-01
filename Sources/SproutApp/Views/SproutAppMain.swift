@@ -59,9 +59,9 @@ struct SproutAppMain: App {
 
     private var menuBarSymbol: String {
         switch app.aggregateStatus {
-        case .idle:    return "leaf"
+        case .idle: return "leaf"
         case .running: return "leaf.fill"
-        case .error:   return "exclamationmark.triangle.fill"
+        case .error: return "exclamationmark.triangle.fill"
         }
     }
 }

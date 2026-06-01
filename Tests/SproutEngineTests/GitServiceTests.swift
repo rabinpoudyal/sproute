@@ -9,7 +9,8 @@ private let wt = URL(fileURLWithPath: "/wt/login")
     let shell = FakeShellRunner()
     let git = GitService(shell: shell)
     try await git.worktreeAdd(repo: repo, path: "/wt/login", base: "main", branch: "feature/login")
-    #expect(shell.calls.last?.command
+    #expect(
+        shell.calls.last?.command
             == "git worktree add -b 'feature/login' '/wt/login' 'main'")
     #expect(shell.calls.last?.cwd == "/repo")
 }
@@ -24,25 +25,38 @@ private let wt = URL(fileURLWithPath: "/wt/login")
 
 @Test func isDirtyTrueWhenStatusNonEmpty() async throws {
     let shell = FakeShellRunner()
-    shell.runResults = [("status --porcelain",
-                         ProcessResult(stdout: " M file.txt\n", stderr: "", exitCode: 0))]
+    shell.runResults = [
+        (
+            "status --porcelain",
+            ProcessResult(stdout: " M file.txt\n", stderr: "", exitCode: 0)
+        )
+    ]
     let git = GitService(shell: shell)
     #expect(try await git.isDirty(worktree: wt) == true)
 }
 
 @Test func isDirtyFalseWhenStatusEmpty() async throws {
     let shell = FakeShellRunner()
-    shell.runResults = [("status --porcelain",
-                         ProcessResult(stdout: "", stderr: "", exitCode: 0))]
+    shell.runResults = [
+        (
+            "status --porcelain",
+            ProcessResult(stdout: "", stderr: "", exitCode: 0)
+        )
+    ]
     let git = GitService(shell: shell)
     #expect(try await git.isDirty(worktree: wt) == false)
 }
 
 @Test func branchesParsesAndStripsMarkers() async throws {
     let shell = FakeShellRunner()
-    shell.runResults = [("branch -a",
-        ProcessResult(stdout: "* main\n  develop\n  remotes/origin/feature/x\n",
-                      stderr: "", exitCode: 0))]
+    shell.runResults = [
+        (
+            "branch -a",
+            ProcessResult(
+                stdout: "* main\n  develop\n  remotes/origin/feature/x\n",
+                stderr: "", exitCode: 0)
+        )
+    ]
     let git = GitService(shell: shell)
     let branches = try await git.branches(repo: repo)
     #expect(branches == ["main", "develop", "remotes/origin/feature/x"])

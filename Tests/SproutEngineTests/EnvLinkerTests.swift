@@ -24,8 +24,9 @@ private let wt = URL(fileURLWithPath: "/wt/login")
 @Test func writeLocalWritesPortAndDatabaseURL() throws {
     let fs = FakeFileSystem()
     let linker = EnvLinker(fs: fs)
-    try linker.writeLocal(file: ".env.local", worktree: wt,
-                          port: 4001, databaseURL: "postgres://localhost/shop_x")
+    try linker.writeLocal(
+        file: ".env.local", worktree: wt,
+        port: 4001, databaseURL: "postgres://localhost/shop_x")
     #expect(fs.writes.count == 1)
     #expect(fs.writes.first?.path == "/wt/login/.env.local")
     #expect(fs.writes.first?.contents == "PORT=4001\nDATABASE_URL=postgres://localhost/shop_x\n")

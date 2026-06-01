@@ -9,17 +9,21 @@ private struct AliveChecker: ProcessChecker {
     func isAlive(pid: Int32) -> Bool { alive.contains(pid) }
 }
 
-private func makeManager(shell: FakeShellRunner, store: FakeStateStore,
-                         fs: FakeFileSystem = FakeFileSystem(),
-                         prober: PortProber,
-                         checker: ProcessChecker = AliveChecker(alive: []),
-                         terminator: FakeProcessTerminator = FakeProcessTerminator())
-                         -> WorkspaceManager {
+private func makeManager(
+    shell: FakeShellRunner, store: FakeStateStore,
+    fs: FakeFileSystem = FakeFileSystem(),
+    prober: PortProber,
+    checker: ProcessChecker = AliveChecker(alive: []),
+    terminator: FakeProcessTerminator = FakeProcessTerminator()
+)
+    -> WorkspaceManager
+{
     let renderer = TemplateRenderer()
     return WorkspaceManager(
         git: GitService(shell: shell),
-        portAllocator: PortAllocator(config: PortConfig(lower: 4000, upper: 4010),
-                                     store: store, prober: prober),
+        portAllocator: PortAllocator(
+            config: PortConfig(lower: 4000, upper: 4010),
+            store: store, prober: prober),
         database: DatabaseService(shell: shell, renderer: renderer),
         envLinker: EnvLinker(fs: fs), fs: fs,
         setupRunner: SetupRunner(shell: shell, renderer: renderer),
@@ -37,8 +41,10 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     let fs = FakeFileSystem(); fs.existing = ["/repo/.env"]
     let mgr = makeManager(shell: shell, store: store, fs: fs, prober: FreeProber())
 
-    let rec = try await mgr.create(config: Fixtures.config(), repo: repo,
-                                   base: "main", branch: "feature/login") { _ in }
+    let rec = try await mgr.create(
+        config: Fixtures.config(), repo: repo,
+        base: "main", branch: "feature/login"
+    ) { _ in }
 
     #expect(rec.port == 4000)
     #expect(rec.dbName == "shop_feature_login")
@@ -59,8 +65,10 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     let mgr = makeManager(shell: shell, store: store, prober: FreeProber())
 
     await #expect(throws: SetupError.self) {
-        _ = try await mgr.create(config: Fixtures.config(), repo: repo,
-                                 base: "main", branch: "feature/login") { _ in }
+        _ = try await mgr.create(
+            config: Fixtures.config(), repo: repo,
+            base: "main", branch: "feature/login"
+        ) { _ in }
     }
     // rollback: record removed, drop + worktree remove issued
     #expect(store.records.isEmpty)
@@ -78,14 +86,16 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     let mgr = makeManager(shell: shell, store: store, fs: fs, prober: FreeProber())
 
     await #expect(throws: SetupError.self) {
-        _ = try await mgr.create(config: Fixtures.config(), repo: repo,
-                                 base: "main", branch: "feature/login") { _ in }
+        _ = try await mgr.create(
+            config: Fixtures.config(), repo: repo,
+            base: "main", branch: "feature/login"
+        ) { _ in }
     }
     let cmds = shell.calls.map(\.command)
     #expect(cmds.contains("git worktree remove --force '/wt/feature_login'"))
     #expect(cmds.contains("git worktree prune"))
-    #expect(cmds.contains("git branch -D 'feature/login'"))   // -b created it; clean for retry
-    #expect(fs.removed.contains("/wt/feature_login"))          // leftover dir force-removed
+    #expect(cmds.contains("git branch -D 'feature/login'"))  // -b created it; clean for retry
+    #expect(fs.removed.contains("/wt/feature_login"))  // leftover dir force-removed
     #expect(store.records.isEmpty)
 }
 
@@ -106,8 +116,9 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
     let r = seedRecord(into: store)
     let mgr = makeManager(shell: shell, store: store, prober: FreeProber(), terminator: term)
 
-    try await mgr.teardown(id: r.id, config: Fixtures.config(), repo: repo,
-                           push: true, force: false)
+    try await mgr.teardown(
+        id: r.id, config: Fixtures.config(), repo: repo,
+        push: true, force: false)
 
     let cmds = shell.calls.map(\.command)
     #expect(cmds.contains("git push -u origin 'feature/login'"))
@@ -120,15 +131,20 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
 
 @Test func teardownAbortsWhenDirtyAndNotForced() async {
     let shell = FakeShellRunner()
-    shell.runResults = [("status --porcelain",
-                         ProcessResult(stdout: " M f\n", stderr: "", exitCode: 0))]
+    shell.runResults = [
+        (
+            "status --porcelain",
+            ProcessResult(stdout: " M f\n", stderr: "", exitCode: 0)
+        )
+    ]
     let store = FakeStateStore()
     let r = seedRecord(into: store)
     let mgr = makeManager(shell: shell, store: store, prober: FreeProber())
 
     await #expect(throws: TeardownError.self) {
-        try await mgr.teardown(id: r.id, config: Fixtures.config(), repo: repo,
-                               push: true, force: false)
+        try await mgr.teardown(
+            id: r.id, config: Fixtures.config(), repo: repo,
+            push: true, force: false)
     }
     // record still present, no destructive commands ran
     #expect(store.records.count == 1)
@@ -138,15 +154,20 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
 @Test func discardSkipsPushAndDirtyCheck() async throws {
     let shell = FakeShellRunner()
     // dirty, but discard must ignore it
-    shell.runResults = [("status --porcelain",
-                         ProcessResult(stdout: " M f\n", stderr: "", exitCode: 0))]
+    shell.runResults = [
+        (
+            "status --porcelain",
+            ProcessResult(stdout: " M f\n", stderr: "", exitCode: 0)
+        )
+    ]
     let store = FakeStateStore()
     let term = FakeProcessTerminator()
     let r = seedRecord(into: store)
     let mgr = makeManager(shell: shell, store: store, prober: FreeProber(), terminator: term)
 
-    try await mgr.teardown(id: r.id, config: Fixtures.config(), repo: repo,
-                           push: false, force: false)
+    try await mgr.teardown(
+        id: r.id, config: Fixtures.config(), repo: repo,
+        push: false, force: false)
 
     let cmds = shell.calls.map(\.command)
     #expect(!cmds.contains("git push -u origin 'feature/login'"))
@@ -158,9 +179,10 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
     let shell = FakeShellRunner()
     let store = FakeStateStore()
     let fs = FakeFileSystem(); fs.existing = ["/wt/feature_login"]
-    _ = seedRecord(into: store, pid: 900)   // pid 900 not alive
-    let mgr = makeManager(shell: shell, store: store, fs: fs, prober: FreeProber(),
-                          checker: AliveChecker(alive: []))
+    _ = seedRecord(into: store, pid: 900)  // pid 900 not alive
+    let mgr = makeManager(
+        shell: shell, store: store, fs: fs, prober: FreeProber(),
+        checker: AliveChecker(alive: []))
     let result = try mgr.reconcile()
     #expect(result.first?.status == .stopped)
     #expect(store.records.first?.status == .stopped)
@@ -172,8 +194,9 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
     let store = FakeStateStore()
     let fs = FakeFileSystem(); fs.existing = ["/wt/feature_login"]
     _ = seedRecord(into: store, pid: 900)
-    let mgr = makeManager(shell: shell, store: store, fs: fs, prober: FreeProber(),
-                          checker: AliveChecker(alive: [900]))
+    let mgr = makeManager(
+        shell: shell, store: store, fs: fs, prober: FreeProber(),
+        checker: AliveChecker(alive: [900]))
     let result = try mgr.reconcile()
     #expect(result.first?.status == .running)
 }
@@ -181,10 +204,11 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
 @Test func reconcileFlagsMissingWorktreeAsOrphaned() throws {
     let shell = FakeShellRunner()
     let store = FakeStateStore()
-    let fs = FakeFileSystem(); fs.existing = []   // worktree gone
+    let fs = FakeFileSystem(); fs.existing = []  // worktree gone
     _ = seedRecord(into: store, pid: nil)
-    let mgr = makeManager(shell: shell, store: store, fs: fs, prober: FreeProber(),
-                          checker: AliveChecker(alive: []))
+    let mgr = makeManager(
+        shell: shell, store: store, fs: fs, prober: FreeProber(),
+        checker: AliveChecker(alive: []))
     let result = try mgr.reconcile()
     #expect(result.first?.orphaned == true)
 }

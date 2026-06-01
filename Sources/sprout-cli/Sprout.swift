@@ -45,8 +45,10 @@ struct Sprout: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "sprout",
         abstract: "Sprout isolated git-worktree workspaces.",
-        subcommands: [Create.self, List.self, Server.self, Push.self,
-                      Done.self, Discard.self, Doctor.self])
+        subcommands: [
+            Create.self, List.self, Server.self, Push.self,
+            Done.self, Discard.self, Doctor.self,
+        ])
 }
 
 struct Create: AsyncParsableCommand {
@@ -56,9 +58,11 @@ struct Create: AsyncParsableCommand {
         let config = try loadConfig()
         let store = JSONStateStore(fileURL: stateURL())
         let mgr = makeManager(config: config, store: store)
-        let rec = try await mgr.create(config: config, repo: repoURL(),
-                                       base: base, branch: branch, onLog: printLog)
-        print("created \(rec.branch)  port=\(rec.port)  db=\(rec.dbName)  pid=\(rec.serverPID ?? -1)")
+        let rec = try await mgr.create(
+            config: config, repo: repoURL(),
+            base: base, branch: branch, onLog: printLog)
+        print(
+            "created \(rec.branch)  port=\(rec.port)  db=\(rec.dbName)  pid=\(rec.serverPID ?? -1)")
     }
 }
 
@@ -66,34 +70,43 @@ struct List: AsyncParsableCommand {
     func run() async throws {
         let store = JSONStateStore(fileURL: stateURL())
         for r in try store.load() {
-            print("\(r.id)  \(r.branch)  :\(r.port)  \(r.dbName)  \(r.status.rawValue)  pid=\(r.serverPID ?? -1)")
+            print(
+                "\(r.id)  \(r.branch)  :\(r.port)  \(r.dbName)  \(r.status.rawValue)  pid=\(r.serverPID ?? -1)"
+            )
         }
     }
 }
 
 struct Server: AsyncParsableCommand {
     @Argument var id: String
-    @Argument var action: String   // "stop" | "restart"
+    @Argument var action: String  // "stop" | "restart"
     func run() async throws {
         let config = try loadConfig()
         let store = JSONStateStore(fileURL: stateURL())
         guard let uuid = UUID(uuidString: id),
-              var rec = try store.load().first(where: { $0.id == uuid }) else {
+            var rec = try store.load().first(where: { $0.id == uuid })
+        else {
             throw ValidationError("workspace not found: \(id)")
         }
         let shell = LoginShellRunner()
         let sup = ServerSupervisor(shell: shell, renderer: TemplateRenderer())
-        let ctx = TemplateContext(project: config.project.name, branch: rec.branch,
-                                  port: rec.port, dbName: rec.dbName, worktree: rec.worktreePath)
+        let ctx = TemplateContext(
+            project: config.project.name, branch: rec.branch,
+            port: rec.port, dbName: rec.dbName, worktree: rec.worktreePath)
         let wt = URL(fileURLWithPath: rec.worktreePath)
-        let env = ["PORT": String(rec.port),
-                   "DATABASE_URL": DatabaseService(shell: shell, renderer: TemplateRenderer())
-                       .databaseURL(config.database, ctx: ctx)]
+        let env = [
+            "PORT": String(rec.port),
+            "DATABASE_URL": DatabaseService(shell: shell, renderer: TemplateRenderer())
+                .databaseURL(config.database, ctx: ctx),
+        ]
         // stop the old PID if any
-        if let pid = rec.serverPID { await PosixProcessTerminator().terminate(pid: pid, graceSeconds: 5) }
+        if let pid = rec.serverPID {
+            await PosixProcessTerminator().terminate(pid: pid, graceSeconds: 5)
+        }
         if action == "restart" {
-            let pid = try await sup.start(command: config.run.serverCommand, ctx: ctx,
-                                          cwd: wt, env: env, onLog: printLog)
+            let pid = try await sup.start(
+                command: config.run.serverCommand, ctx: ctx,
+                cwd: wt, env: env, onLog: printLog)
             rec.serverPID = pid; rec.status = .running
         } else {
             rec.serverPID = nil; rec.status = .stopped
@@ -108,7 +121,8 @@ struct Push: AsyncParsableCommand {
     func run() async throws {
         let store = JSONStateStore(fileURL: stateURL())
         guard let uuid = UUID(uuidString: id),
-              let rec = try store.load().first(where: { $0.id == uuid }) else {
+            let rec = try store.load().first(where: { $0.id == uuid })
+        else {
             throw ValidationError("workspace not found: \(id)")
         }
         try await GitService(shell: LoginShellRunner())

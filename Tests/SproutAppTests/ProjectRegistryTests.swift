@@ -7,7 +7,7 @@ import Testing
         var reg = ProjectRegistry()
         let first = reg.add("/tmp/foo")
         let dup = reg.add("/tmp/foo")
-        let normDup = reg.add("/tmp/foo/")   // normalized duplicate
+        let normDup = reg.add("/tmp/foo/")  // normalized duplicate
         #expect(first)
         #expect(!dup)
         #expect(!normDup)

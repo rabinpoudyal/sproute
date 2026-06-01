@@ -4,8 +4,9 @@ import Foundation
 
 private let cwd = URL(fileURLWithPath: "/wt/login")
 private func ctx() -> TemplateContext {
-    TemplateContext(project: "shop", branch: "login", port: 4001,
-                    dbName: "shop_login", worktree: "/wt/login")
+    TemplateContext(
+        project: "shop", branch: "login", port: 4001,
+        dbName: "shop_login", worktree: "/wt/login")
 }
 
 @Test func startReturnsPidAndSetsRunning() async throws {
@@ -32,6 +33,7 @@ private func ctx() -> TemplateContext {
 @Test func rendersServerCommandTemplate() async throws {
     let shell = FakeShellRunner()
     let sup = ServerSupervisor(shell: shell, renderer: TemplateRenderer())
-    _ = try await sup.start(command: "serve --port {{port}}", ctx: ctx(), cwd: cwd, env: [:]) { _ in }
+    _ = try await sup.start(command: "serve --port {{port}}", ctx: ctx(), cwd: cwd, env: [:]) { _ in
+    }
     #expect(shell.calls.last?.command == "serve --port 4001")
 }

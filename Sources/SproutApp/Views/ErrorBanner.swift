@@ -30,7 +30,8 @@ struct ErrorBanner: View {
         .background(Color.red.opacity(0.08))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.red.opacity(0.4), lineWidth: 1))
+                .stroke(Color.red.opacity(0.4), lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }

@@ -17,7 +17,9 @@ public struct LoginShellRunner: ShellRunner {
         return "/bin/zsh"
     }
 
-    public func run(_ command: String, cwd: URL, env: [String: String]) async throws -> ProcessResult {
+    public func run(_ command: String, cwd: URL, env: [String: String]) async throws
+        -> ProcessResult
+    {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: shellPath)
         proc.arguments = ["-l", "-c", command]
@@ -98,15 +100,17 @@ final class PosixSpawnedProcess: ProcessHandle, @unchecked Sendable {
         }
     }
 
-    private static func pump(fd: Int32, source: LogLine.Source,
-                             group: DispatchGroup, cont: AsyncStream<LogLine>.Continuation) {
+    private static func pump(
+        fd: Int32, source: LogLine.Source,
+        group: DispatchGroup, cont: AsyncStream<LogLine>.Continuation
+    ) {
         group.enter()
         DispatchQueue.global().async {
             let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
             while case let data = handle.availableData, !data.isEmpty {
                 let text = String(decoding: data, as: UTF8.self)
                 for line in text.split(separator: "\n", omittingEmptySubsequences: false)
-                    where !line.isEmpty {
+                where !line.isEmpty {
                     cont.yield(LogLine(source: source, text: String(line)))
                 }
             }
