@@ -1,5 +1,10 @@
 import Foundation
 
+public enum TeardownError: Error, Equatable {
+    case workspaceNotFound(UUID)
+    case dirtyWorktree
+}
+
 public protocol ProcessChecker: Sendable {
     func isAlive(pid: Int32) -> Bool
 }
@@ -119,5 +124,45 @@ public struct WorkspaceManager: Sendable {
         if didWorktree {
             try? await git.worktreeRemove(repo: repo, path: worktreePath)
         }
+    }
+
+    public func teardown(id: UUID, config: Config, repo: URL,
+                         push: Bool, force: Bool) async throws {
+        guard let record = try store.load().first(where: { $0.id == id }) else {
+            throw TeardownError.workspaceNotFound(id)
+        }
+        let worktreeURL = URL(fileURLWithPath: record.worktreePath)
+        let ctx = context(config: config, branch: record.branch, port: record.port,
+                          dbName: record.dbName, worktree: record.worktreePath)
+
+        // pre-hook
+        if let pre = config.hooks.preTeardown {
+            _ = try? await shell.run(renderer.render(pre, ctx), cwd: worktreeURL, env: [:])
+        }
+
+        if push {
+            if try await git.isDirty(worktree: worktreeURL), !force {
+                throw TeardownError.dirtyWorktree
+            }
+            try await git.push(worktree: worktreeURL, branch: record.branch)
+        }
+
+        // stop server
+        if let pid = record.serverPID {
+            await terminator.terminate(pid: pid, graceSeconds: 5)
+        }
+        // drop DB
+        try await database.drop(config.database, ctx: ctx, cwd: repo)
+        // remove worktree
+        try await git.worktreeRemove(repo: repo, path: record.worktreePath)
+        // delete branch
+        try await git.deleteBranch(repo: repo, branch: record.branch)
+
+        // post-hook
+        if let post = config.hooks.postTeardown {
+            _ = try? await shell.run(renderer.render(post, ctx), cwd: repo, env: [:])
+        }
+
+        try store.remove(id: id)
     }
 }

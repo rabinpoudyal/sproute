@@ -68,3 +68,68 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     #expect(cmds.contains("dropdb --if-exists shop_feature_login"))
     #expect(cmds.contains("git worktree remove --force '/wt/feature_login'"))
 }
+
+private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> WorkspaceRecord {
+    let r = WorkspaceRecord(
+        id: UUID(), branch: "feature/login", base: "main",
+        worktreePath: "/wt/feature_login", port: 4000, dbName: "shop_feature_login",
+        status: .running, serverPID: pid, createdAt: Date())
+    store.records = [r]
+    return r
+}
+
+@Test func teardownWithPushRunsFullOrderAndClearsState() async throws {
+    let shell = FakeShellRunner()
+    shell.runResults = [("status --porcelain", ProcessResult(stdout: "", stderr: "", exitCode: 0))]
+    let store = FakeStateStore()
+    let term = FakeProcessTerminator()
+    let r = seedRecord(into: store)
+    let mgr = makeManager(shell: shell, store: store, prober: FreeProber(), terminator: term)
+
+    try await mgr.teardown(id: r.id, config: Fixtures.config(), repo: repo,
+                           push: true, force: false)
+
+    let cmds = shell.calls.map(\.command)
+    #expect(cmds.contains("git push -u origin 'feature/login'"))
+    #expect(cmds.contains("dropdb --if-exists shop_feature_login"))
+    #expect(cmds.contains("git worktree remove --force '/wt/feature_login'"))
+    #expect(cmds.contains("git branch -D 'feature/login'"))
+    #expect(term.terminated == [900])
+    #expect(store.records.isEmpty)
+}
+
+@Test func teardownAbortsWhenDirtyAndNotForced() async {
+    let shell = FakeShellRunner()
+    shell.runResults = [("status --porcelain",
+                         ProcessResult(stdout: " M f\n", stderr: "", exitCode: 0))]
+    let store = FakeStateStore()
+    let r = seedRecord(into: store)
+    let mgr = makeManager(shell: shell, store: store, prober: FreeProber())
+
+    await #expect(throws: TeardownError.self) {
+        try await mgr.teardown(id: r.id, config: Fixtures.config(), repo: repo,
+                               push: true, force: false)
+    }
+    // record still present, no destructive commands ran
+    #expect(store.records.count == 1)
+    #expect(!shell.calls.map(\.command).contains("git push -u origin 'feature/login'"))
+}
+
+@Test func discardSkipsPushAndDirtyCheck() async throws {
+    let shell = FakeShellRunner()
+    // dirty, but discard must ignore it
+    shell.runResults = [("status --porcelain",
+                         ProcessResult(stdout: " M f\n", stderr: "", exitCode: 0))]
+    let store = FakeStateStore()
+    let term = FakeProcessTerminator()
+    let r = seedRecord(into: store)
+    let mgr = makeManager(shell: shell, store: store, prober: FreeProber(), terminator: term)
+
+    try await mgr.teardown(id: r.id, config: Fixtures.config(), repo: repo,
+                           push: false, force: false)
+
+    let cmds = shell.calls.map(\.command)
+    #expect(!cmds.contains("git push -u origin 'feature/login'"))
+    #expect(cmds.contains("dropdb --if-exists shop_feature_login"))
+    #expect(store.records.isEmpty)
+}
