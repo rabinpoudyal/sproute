@@ -83,6 +83,7 @@ public struct WorkspaceManager: Sendable {
 
         // Track what to roll back, in reverse order.
         var didWorktree = false, didDB = false
+        var startedProcesses: [ProcessState] = []
 
         do {
             try await git.worktreeAdd(repo: repo, path: worktreePath, base: base, branch: branch)
@@ -115,19 +116,23 @@ public struct WorkspaceManager: Sendable {
                 config.setup, ctx: ctx, cwd: worktreeURL,
                 env: childEnv, onLog: onLog)
 
-            var processes: [ProcessState] = []
             for proc in config.run.processes {
                 let supervisor = ServerSupervisor(shell: shell, renderer: renderer)
                 let pid = try await supervisor.start(
                     command: proc.command, ctx: ctx,
                     cwd: worktreeURL, env: childEnv, onLog: onLog)
-                processes.append(ProcessState(name: proc.name, pid: pid, status: .running))
+                startedProcesses.append(ProcessState(name: proc.name, pid: pid, status: .running))
             }
-            record.processes = processes
-            record.status = aggregateStatus(processes)
+            record.processes = startedProcesses
+            record.status = aggregateStatus(startedProcesses)
             try store.upsert(record)
             return record
         } catch {
+            for proc in startedProcesses {
+                if let pid = proc.pid {
+                    await terminator.terminate(pid: pid, graceSeconds: 5)
+                }
+            }
             await rollback(
                 config: config, repo: repo, worktreePath: worktreePath,
                 dbName: dbName, branch: branch,

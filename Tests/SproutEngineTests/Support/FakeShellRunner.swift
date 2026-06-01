@@ -4,12 +4,15 @@ import Foundation
 /// Records every call; returns scripted results matched by command substring.
 final class FakeShellRunner: ShellRunner, @unchecked Sendable {
     struct Call: Equatable { let command: String; let cwd: String; let env: [String: String] }
+    struct LaunchError: Error {}
 
     private(set) var calls: [Call] = []
     /// command-substring -> result. First match wins; falls back to exit 0 empty.
     var runResults: [(match: String, result: ProcessResult)] = []
     /// command-substring -> handle factory.
     var handles: [(match: String, make: () -> FakeProcessHandle)] = []
+    /// command substrings that should make launch() throw.
+    var throwOnLaunch: Set<String> = []
 
     func run(_ command: String, cwd: URL, env: [String: String]) async throws -> ProcessResult {
         calls.append(Call(command: command, cwd: cwd.path, env: env))
@@ -19,6 +22,7 @@ final class FakeShellRunner: ShellRunner, @unchecked Sendable {
 
     func launch(_ command: String, cwd: URL, env: [String: String]) throws -> ProcessHandle {
         calls.append(Call(command: command, cwd: cwd.path, env: env))
+        if throwOnLaunch.contains(where: { command.contains($0) }) { throw LaunchError() }
         for h in handles where command.contains(h.match) { return h.make() }
         return FakeProcessHandle(pid: 4242, exitCode: 0, lines: [])
     }

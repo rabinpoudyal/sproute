@@ -99,6 +99,36 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     #expect(store.records.isEmpty)
 }
 
+@Test func createRollbackTerminatesAlreadyStartedProcessesOnPartialFailure() async throws {
+    // Build a two-process config: "web" starts fine, "worker" fails to launch.
+    var twoProcessConfig = Fixtures.config()
+    twoProcessConfig.setup = []
+    twoProcessConfig.run = RunConfig(
+        serverCommand: "npm run dev",
+        processes: [
+            ProcessConfig(name: "web", command: "npm run web"),
+            ProcessConfig(name: "worker", command: "npm run worker"),
+        ])
+    let shell = FakeShellRunner()
+    // "web" launches successfully with pid 777; "worker" launch throws.
+    shell.handles = [("npm run web", { FakeProcessHandle(pid: 777, exitCode: 0, lines: []) })]
+    shell.throwOnLaunch = ["npm run worker"]
+    let store = FakeStateStore()
+    let term = FakeProcessTerminator()
+    let mgr = makeManager(shell: shell, store: store, prober: FreeProber(), terminator: term)
+
+    await #expect(throws: (any Error).self) {
+        _ = try await mgr.create(
+            config: twoProcessConfig, repo: repo,
+            base: "main", branch: "feature/login"
+        ) { _ in }
+    }
+    // The first process (pid 777) must have been terminated during rollback.
+    #expect(term.terminated.contains(777))
+    // No record should persist.
+    #expect(store.records.isEmpty)
+}
+
 private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> WorkspaceRecord {
     let procs = pid.map { [ProcessState(name: "server", pid: $0, status: .running)] } ?? []
     let r = WorkspaceRecord(
