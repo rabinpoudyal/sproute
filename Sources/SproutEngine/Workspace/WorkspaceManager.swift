@@ -232,10 +232,17 @@ public struct WorkspaceManager: Sendable {
                     changed = true
                 }
             }
-            if changed, record.status != .creating, record.status != .tearingDown {
-                record.status = aggregateStatus(record.processes)
-                try store.upsert(record)
+            // Normalize the workspace status to its processes, not just when one died.
+            // Records with no processes (or a stale persisted `running` from an older
+            // build) must settle to the aggregate, e.g. `[]` -> `.stopped`.
+            if record.status != .creating, record.status != .tearingDown {
+                let status = aggregateStatus(record.processes)
+                if status != record.status {
+                    record.status = status
+                    changed = true
+                }
             }
+            if changed { try store.upsert(record) }
             let orphaned = !fs.fileExists(URL(fileURLWithPath: record.worktreePath))
             out.append(ReconciledWorkspace(record: record, orphaned: orphaned))
         }
