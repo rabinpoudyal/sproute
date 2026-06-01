@@ -63,9 +63,12 @@ public struct WorkspaceManager: Sendable {
             port: port, dbName: dbName, worktree: worktree)
     }
 
+    /// `log` routes output per stream so each process (and setup) can be shown in its
+    /// own console. `stream` is `"setup"` during setup and the process name while a
+    /// `[[run.process]]` runs.
     public func create(
         config: Config, repo: URL, base: String, branch: String,
-        onLog: @escaping @Sendable (LogLine) -> Void
+        log: @escaping @Sendable (_ stream: String, LogLine) -> Void
     ) async throws -> WorkspaceRecord {
         let slug = TemplateContext.slugify(branch)
         // Resolve the worktree path up front. A relative `base_dir` (e.g.
@@ -114,13 +117,14 @@ public struct WorkspaceManager: Sendable {
             let childEnv = ["PORT": String(port), "DATABASE_URL": dbURL]
             try await setupRunner.run(
                 config.setup, ctx: ctx, cwd: worktreeURL,
-                env: childEnv, onLog: onLog)
+                env: childEnv, onLog: { log("setup", $0) })
 
             for proc in config.run.processes {
                 let supervisor = ServerSupervisor(shell: shell, renderer: renderer)
+                let name = proc.name
                 let pid = try await supervisor.start(
                     command: proc.command, ctx: ctx,
-                    cwd: worktreeURL, env: childEnv, onLog: onLog)
+                    cwd: worktreeURL, env: childEnv, onLog: { log(name, $0) })
                 startedProcesses.append(ProcessState(name: proc.name, pid: pid, status: .running))
             }
             record.processes = startedProcesses

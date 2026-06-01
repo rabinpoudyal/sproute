@@ -117,11 +117,16 @@ final class ProjectStore: ObservableObject, Identifiable {
     // MARK: - Lifecycle actions
 
     func create(base: String, branch: String) async {
-        let log = onLog(branch: branch, process: "create")
+        // Route each stream ("setup" + per-process) to its own buffer so the detail
+        // view's per-process consoles show create-time output, not just an unseen
+        // "create" buffer.
+        let route: @Sendable (String, LogLine) -> Void = { [weak self] stream, line in
+            Task { @MainActor in self?.logBuffer(branch: branch, process: stream).append(line) }
+        }
         do {
             _ = try await manager.create(
                 config: config, repo: rootURL,
-                base: base, branch: branch, onLog: log)
+                base: base, branch: branch, log: route)
             refresh()
         } catch {
             lastError = AppError(error)

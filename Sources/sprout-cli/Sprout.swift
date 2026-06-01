@@ -60,7 +60,7 @@ struct Create: AsyncParsableCommand {
         let mgr = makeManager(config: config, store: store)
         let rec = try await mgr.create(
             config: config, repo: repoURL(),
-            base: base, branch: branch, onLog: printLog)
+            base: base, branch: branch, log: { _, line in printLog(line) })
         let procs = rec.processes.map { "\($0.name):\($0.pid ?? -1)" }.joined(separator: ",")
         print("created \(rec.branch)  port=\(rec.port)  db=\(rec.dbName)  [\(procs)]")
     }

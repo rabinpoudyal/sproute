@@ -44,7 +44,7 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     let rec = try await mgr.create(
         config: Fixtures.config(), repo: repo,
         base: "main", branch: "feature/login"
-    ) { _ in }
+    ) { _, _ in }
 
     #expect(rec.port == 4000)
     #expect(rec.dbName == "shop_feature_login")
@@ -68,7 +68,7 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
         _ = try await mgr.create(
             config: Fixtures.config(), repo: repo,
             base: "main", branch: "feature/login"
-        ) { _ in }
+        ) { _, _ in }
     }
     // rollback: record removed, drop + worktree remove issued
     #expect(store.records.isEmpty)
@@ -89,7 +89,7 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
         _ = try await mgr.create(
             config: Fixtures.config(), repo: repo,
             base: "main", branch: "feature/login"
-        ) { _ in }
+        ) { _, _ in }
     }
     let cmds = shell.calls.map(\.command)
     #expect(cmds.contains("git worktree remove --force '/wt/feature_login'"))
@@ -120,7 +120,7 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
         _ = try await mgr.create(
             config: twoProcessConfig, repo: repo,
             base: "main", branch: "feature/login"
-        ) { _ in }
+        ) { _, _ in }
     }
     // The first process (pid 777) must have been terminated during rollback.
     #expect(term.terminated.contains(777))
