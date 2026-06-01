@@ -19,8 +19,6 @@ struct WorkspaceDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
-            serverBar
-            Divider()
             LogConsoleView(
                 buffer: project.logBuffer(for: rec.branch),
                 onPopOut: {
@@ -28,7 +26,8 @@ struct WorkspaceDetailView: View {
                 })
         }
         .navigationTitle(rec.branch)
-        .toolbar { lifecycleMenu }
+        .navigationSubtitle(rec.worktreePath)
+        .toolbar { toolbarContent }
         .confirmationDialog(
             "Tear down \(rec.branch)?",
             isPresented: $confirmDone, titleVisibility: .visible
@@ -68,30 +67,16 @@ struct WorkspaceDetailView: View {
     // MARK: header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(rec.branch).font(.title2.bold())
-                StatusBadge(status: rec.status)
-                if item.orphaned {
-                    Label("worktree missing", systemImage: "exclamationmark.triangle")
-                        .font(.caption).foregroundStyle(.orange)
-                }
-                Spacer()
+        HStack(spacing: 16) {
+            StatusBadge(status: rec.status)
+            if item.orphaned {
+                Label("worktree missing", systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundStyle(.orange)
             }
-            HStack(spacing: 16) {
-                field("Port", ":\(rec.port)")
-                field("Database", rec.dbName)
-                field("PID", rec.serverPID.map(String.init) ?? "—")
-            }
-            HStack(spacing: 8) {
-                Text(rec.worktreePath)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1).truncationMode(.middle)
-                Button("Reveal") { reveal() }.buttonStyle(.link).font(.caption)
-                Button("Editor") { openInEditor() }.buttonStyle(.link).font(.caption)
-                Button("Browser") { openInBrowser() }.buttonStyle(.link).font(.caption)
-            }
+            field("Port", ":\(rec.port)")
+            field("Database", rec.dbName)
+            field("PID", rec.serverPID.map(String.init) ?? "—")
+            Spacer()
         }
         .padding()
     }
@@ -103,10 +88,12 @@ struct WorkspaceDetailView: View {
         }
     }
 
-    // MARK: server controls
+    // MARK: toolbar
 
-    private var serverBar: some View {
-        HStack(spacing: 12) {
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
+            if busy { ProgressView().controlSize(.small) }
             if rec.status == .running {
                 Button {
                     run { await project.stopServer(item) }
@@ -126,21 +113,16 @@ struct WorkspaceDetailView: View {
                 }
                 .disabled(item.orphaned)
             }
-            Spacer()
-            if busy { ProgressView().controlSize(.small) }
-        }
-        .padding(.horizontal).padding(.vertical, 8)
-    }
-
-    private var lifecycleMenu: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
             Menu {
-                Button("Push") { run { await project.push(item) } }
+                Button("Reveal in Finder") { reveal() }
+                Button("Open in Editor") { openInEditor() }
+                Button("Open in Browser") { openInBrowser() }
                 Divider()
+                Button("Push") { run { await project.push(item) } }
                 Button("Done (push & tear down)") { confirmDone = true }
                 Button("Discard…", role: .destructive) { confirmDiscard = true }
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Label("Actions", systemImage: "ellipsis.circle")
             }
         }
     }
@@ -179,68 +161,60 @@ struct WorkspaceDetailView: View {
     }
 }
 
-// MARK: - Project overview (doctor + config + new workspace)
+// MARK: - Project overview (editable config + doctor + new workspace)
 
 struct ProjectOverviewView: View {
+    @EnvironmentObject var app: AppModel
     @ObservedObject var project: ProjectStore
     let onNewWorkspace: () -> Void
 
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack {
-                    Text(project.name).font(.title.bold())
-                    Spacer()
-                    Button(action: onNewWorkspace) {
-                        Label("New Workspace", systemImage: "plus")
-                    }
-                }
-                GroupBox("Configuration") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        row("Root", project.rootURL.path)
-                        row("Worktrees", project.config.worktree.baseDir)
-                        row(
-                            "Port range",
-                            "\(project.config.port.lower)–\(project.config.port.upper)")
-                        row("Server", project.config.run.serverCommand)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(6)
-                }
-                GroupBox("Doctor") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        if project.doctor.isEmpty {
-                            Text("Not run yet.").foregroundStyle(.secondary)
-                        }
-                        ForEach(project.doctor, id: \.tool) { check in
-                            HStack {
-                                Image(
-                                    systemName: check.found
-                                        ? "checkmark.circle.fill" : "xmark.circle.fill"
-                                )
-                                .foregroundStyle(check.found ? .green : .red)
-                                Text(check.tool).bold()
-                                Text(check.path ?? "not found")
-                                    .font(.caption.monospaced())
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                            }
-                        }
-                        Button("Run Doctor") { Task { await project.runDoctor() } }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(6)
-                }
-            }
-            .padding()
-        }
-        .navigationTitle(project.name)
+    @StateObject private var draft: ConfigDraft
+
+    init(project: ProjectStore, onNewWorkspace: @escaping () -> Void) {
+        self.project = project
+        self.onNewWorkspace = onNewWorkspace
+        _draft = StateObject(wrappedValue: ConfigDraft(project.config))
     }
 
-    private func row(_ k: String, _ v: String) -> some View {
-        HStack(alignment: .top) {
-            Text(k).frame(width: 90, alignment: .leading).foregroundStyle(.secondary)
-            Text(v).font(.callout.monospaced()).textSelection(.enabled)
+    var body: some View {
+        ConfigFormView(
+            draft: draft,
+            projectRoot: project.rootURL,
+            saveTitle: "Save changes",
+            onSave: { try app.saveConfig($0, to: project.rootURL) },
+            extra: { doctorSection }
+        )
+        .navigationTitle(project.name)
+        .navigationSubtitle(project.rootURL.path)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: onNewWorkspace) {
+                    Label("New Workspace", systemImage: "plus")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var doctorSection: some View {
+        Section("Doctor") {
+            if project.doctor.isEmpty {
+                Text("Not run yet.").foregroundStyle(.secondary)
+            }
+            ForEach(project.doctor, id: \.tool) { check in
+                HStack {
+                    Image(
+                        systemName: check.found
+                            ? "checkmark.circle.fill" : "xmark.circle.fill"
+                    )
+                    .foregroundStyle(check.found ? Color.green : Color.red)
+                    Text(check.tool).bold()
+                    Text(check.path ?? "not found")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+            }
+            Button("Run Doctor") { Task { await project.runDoctor() } }
         }
     }
 }

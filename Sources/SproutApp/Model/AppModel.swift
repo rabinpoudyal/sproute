@@ -46,6 +46,24 @@ final class AppModel: ObservableObject {
         loadProjects()
     }
 
+    /// Write an edited config back to a project's `.sprout.toml`, then reload so the
+    /// engine picks up the new settings. Throws on a write failure (shown by the form).
+    func saveConfig(_ config: Config, to root: URL) throws {
+        let url = root.appendingPathComponent(".sprout.toml")
+        try TOMLConfigWriter.serialize(config).write(to: url, atomically: true, encoding: .utf8)
+        loadProjects()
+    }
+
+    /// Author a brand-new project: write its `.sprout.toml`, register the folder,
+    /// then load it. Throws on a write failure.
+    func createProject(at root: URL, config: Config) throws {
+        let url = root.appendingPathComponent(".sprout.toml")
+        try TOMLConfigWriter.serialize(config).write(to: url, atomically: true, encoding: .utf8)
+        registry.add(root.path)
+        try registry.save(to: SproutPaths.registryFile)
+        loadProjects()
+    }
+
     func refreshAll() {
         for p in projects { p.refresh() }
     }

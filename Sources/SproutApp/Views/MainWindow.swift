@@ -11,12 +11,14 @@ struct MainWindow: View {
     @EnvironmentObject var app: AppModel
     @State private var selection: SidebarSelection?
     @State private var createForProject: ProjectStore?
+    @State private var showingNewProject = false
 
     var body: some View {
         NavigationSplitView {
             SidebarView(
                 selection: $selection,
                 onAddProject: addProject,
+                onNewProject: { showingNewProject = true },
                 onNewWorkspace: { createForProject = $0 }
             )
             .frame(minWidth: 240)
@@ -27,6 +29,9 @@ struct MainWindow: View {
         }
         .sheet(item: $createForProject) { project in
             CreateWorkspaceSheet(project: project)
+        }
+        .sheet(isPresented: $showingNewProject) {
+            CreateProjectSheet()
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -60,6 +65,7 @@ struct SidebarView: View {
     @EnvironmentObject var app: AppModel
     @Binding var selection: SidebarSelection?
     let onAddProject: () -> Void
+    let onNewProject: () -> Void
     let onNewWorkspace: (ProjectStore) -> Void
 
     /// Projects whose worktree list is collapsed (expanded by default).
@@ -71,8 +77,9 @@ struct SidebarView: View {
                 ContentUnavailableView {
                     Label("No Projects", systemImage: "leaf")
                 } description: {
-                    Text("Add a folder with a .sprout.toml to get started.")
+                    Text("Create a new project or add a folder with a .sprout.toml.")
                 } actions: {
+                    Button("New Project", action: onNewProject)
                     Button("Add Project", action: onAddProject)
                 }
             }
@@ -122,9 +129,15 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
             if !app.projects.isEmpty {
-                Button(action: onAddProject) {
-                    Label("Add Project", systemImage: "plus.circle")
-                        .frame(maxWidth: .infinity)
+                HStack {
+                    Button(action: onNewProject) {
+                        Label("New", systemImage: "plus.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    Button(action: onAddProject) {
+                        Label("Add", systemImage: "folder.badge.plus")
+                            .frame(maxWidth: .infinity)
+                    }
                 }
                 .buttonStyle(.borderless)
                 .padding(8)
