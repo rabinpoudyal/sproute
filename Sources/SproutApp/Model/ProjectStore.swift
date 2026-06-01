@@ -8,6 +8,12 @@ struct WorkspaceItem: Identifiable, Equatable {
     var id: UUID { record.id }
 }
 
+/// Identifies one supervised process within a workspace branch.
+private struct ProcessKey: Hashable {
+    let branch: String
+    let name: String
+}
+
 /// View-model for a single registered project. Wraps the headless engine
 /// (`WorkspaceManager` + friends) and exposes UI-friendly state and actions.
 @MainActor
@@ -25,8 +31,8 @@ final class ProjectStore: ObservableObject, Identifiable {
     private let store: StateStore
     private let manager: WorkspaceManager
 
-    private var buffers: [String: LogBuffer] = [:]
-    private var supervisors: [String: ServerSupervisor] = [:]
+    private var buffers: [ProcessKey: LogBuffer] = [:]
+    private var supervisors: [ProcessKey: ServerSupervisor] = [:]
 
     var name: String { config.project.name }
 
@@ -62,15 +68,16 @@ final class ProjectStore: ObservableObject, Identifiable {
 
     // MARK: - Logs
 
-    func logBuffer(for branch: String) -> LogBuffer {
-        if let b = buffers[branch] { return b }
-        let b = LogBuffer(id: branch)
-        buffers[branch] = b
+    func logBuffer(branch: String, process: String) -> LogBuffer {
+        let key = ProcessKey(branch: branch, name: process)
+        if let b = buffers[key] { return b }
+        let b = LogBuffer(id: "\(branch)#\(process)")
+        buffers[key] = b
         return b
     }
 
-    private func onLog(for branch: String) -> @Sendable (LogLine) -> Void {
-        let buffer = logBuffer(for: branch)
+    private func onLog(branch: String, process: String) -> @Sendable (LogLine) -> Void {
+        let buffer = logBuffer(branch: branch, process: process)
         return { line in Task { @MainActor in buffer.append(line) } }
     }
 
@@ -110,7 +117,7 @@ final class ProjectStore: ObservableObject, Identifiable {
     // MARK: - Lifecycle actions
 
     func create(base: String, branch: String) async {
-        let log = onLog(for: branch)
+        let log = onLog(branch: branch, process: "create")
         do {
             _ = try await manager.create(
                 config: config, repo: rootURL,
@@ -121,22 +128,27 @@ final class ProjectStore: ObservableObject, Identifiable {
         }
     }
 
-    func startOrRestartServer(_ item: WorkspaceItem) async {
+    /// Look up a process's command from config; nil if the name is unknown.
+    private func command(for name: String) -> String? {
+        config.run.processes.first(where: { $0.name == name })?.command
+    }
+
+    func startProcess(_ item: WorkspaceItem, name: String) async {
+        guard let command = command(for: name) else { return }
         var rec = item.record
-        let log = onLog(for: rec.branch)
-        if let pid = rec.serverPID {
-            await PosixProcessTerminator().terminate(pid: pid, graceSeconds: 5)
+        let key = ProcessKey(branch: rec.branch, name: name)
+        // terminate any existing pid for this process
+        if let existing = rec.processes.first(where: { $0.name == name })?.pid {
+            await PosixProcessTerminator().terminate(pid: existing, graceSeconds: 5)
         }
         let sup = ServerSupervisor(shell: shell, renderer: renderer)
         do {
             let pid = try await sup.start(
-                command: config.run.serverCommand,
-                ctx: context(rec),
+                command: command, ctx: context(rec),
                 cwd: URL(fileURLWithPath: rec.worktreePath),
-                env: childEnv(rec), onLog: log)
-            supervisors[rec.branch] = sup
-            rec.serverPID = pid
-            rec.status = .running
+                env: childEnv(rec), onLog: onLog(branch: rec.branch, process: name))
+            supervisors[key] = sup
+            upsertProcess(&rec, ProcessState(name: name, pid: pid, status: .running))
             try store.upsert(rec)
             refresh()
         } catch {
@@ -144,18 +156,49 @@ final class ProjectStore: ObservableObject, Identifiable {
         }
     }
 
-    func stopServer(_ item: WorkspaceItem) async {
+    func stopProcess(_ item: WorkspaceItem, name: String) async {
         var rec = item.record
-        if let sup = supervisors[rec.branch] {
+        let key = ProcessKey(branch: rec.branch, name: name)
+        if let sup = supervisors[key] {
             await sup.stop(graceSeconds: 5)
-        } else if let pid = rec.serverPID {
+        } else if let pid = rec.processes.first(where: { $0.name == name })?.pid {
             await PosixProcessTerminator().terminate(pid: pid, graceSeconds: 5)
         }
-        supervisors[rec.branch] = nil
-        rec.serverPID = nil
-        rec.status = .stopped
+        supervisors[key] = nil
+        upsertProcess(&rec, ProcessState(name: name, pid: nil, status: .stopped))
         try? store.upsert(rec)
         refresh()
+    }
+
+    func restartProcess(_ item: WorkspaceItem, name: String) async {
+        await stopProcess(item, name: name)
+        if let fresh = workspaces.first(where: { $0.id == item.id }) {
+            await startProcess(fresh, name: name)
+        }
+    }
+
+    func startAll(_ item: WorkspaceItem) async {
+        for proc in config.run.processes {
+            let current = workspaces.first(where: { $0.id == item.id }) ?? item
+            await startProcess(current, name: proc.name)
+        }
+    }
+
+    func stopAll(_ item: WorkspaceItem) async {
+        for proc in config.run.processes {
+            let current = workspaces.first(where: { $0.id == item.id }) ?? item
+            await stopProcess(current, name: proc.name)
+        }
+    }
+
+    /// Replace (or insert) a process state by name and recompute the record's status.
+    private func upsertProcess(_ rec: inout WorkspaceRecord, _ state: ProcessState) {
+        if let i = rec.processes.firstIndex(where: { $0.name == state.name }) {
+            rec.processes[i] = state
+        } else {
+            rec.processes.append(state)
+        }
+        rec.status = aggregateStatus(rec.processes)
     }
 
     func push(_ item: WorkspaceItem) async {
@@ -174,7 +217,7 @@ final class ProjectStore: ObservableObject, Identifiable {
             try await manager.teardown(
                 id: item.record.id, config: config,
                 repo: rootURL, push: push, force: force)
-            supervisors[item.record.branch] = nil
+            supervisors = supervisors.filter { $0.key.branch != item.record.branch }
             refresh()
         } catch {
             lastError = AppError(error)

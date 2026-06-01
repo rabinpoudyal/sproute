@@ -67,8 +67,10 @@ struct DetachedLogWindow: View {
             if let target,
                 let project = app.projects.first(where: { $0.id == target.projectID })
             {
-                LogConsoleView(buffer: project.logBuffer(for: target.branch))
-                    .navigationTitle("\(project.name) / \(target.branch)")
+                LogConsoleView(
+                    buffer: project.logBuffer(branch: target.branch, process: target.process)
+                )
+                .navigationTitle("\(project.name) / \(target.branch) / \(target.process)")
             } else {
                 ContentUnavailableView("No Logs", systemImage: "doc.plaintext")
             }

@@ -1,11 +1,12 @@
 import SwiftUI
 import AppKit
 
-/// Identifies a detached log window: a workspace branch within a project.
+/// Identifies a detached log window: a process within a workspace branch within a project.
 struct LogTarget: Identifiable, Hashable, Codable {
     let projectID: String
     let branch: String
-    var id: String { "\(projectID)#\(branch)" }
+    let process: String
+    var id: String { "\(projectID)#\(branch)#\(process)" }
 }
 
 /// Forces a normal foreground app. Without this the `MenuBarExtra` can make the

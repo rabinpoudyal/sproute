@@ -12,18 +12,31 @@ struct WorkspaceDetailView: View {
     @State private var confirmDone = false
     @State private var confirmDiscard = false
     @State private var dirtyWarning = false
+    @State private var selectedProcess: String?
 
     private var rec: WorkspaceRecord { item.record }
+    private var processNames: [String] { project.config.run.processes.map(\.name) }
+    private var current: String? { selectedProcess ?? processNames.first }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
-            LogConsoleView(
-                buffer: project.logBuffer(for: rec.branch),
-                onPopOut: {
-                    openWindow(value: LogTarget(projectID: project.id, branch: rec.branch))
-                })
+            if let current {
+                processBar(current)
+                Divider()
+                LogConsoleView(
+                    buffer: project.logBuffer(branch: rec.branch, process: current),
+                    onPopOut: {
+                        openWindow(
+                            value: LogTarget(
+                                projectID: project.id, branch: rec.branch, process: current))
+                    })
+            } else {
+                ContentUnavailableView(
+                    "No processes", systemImage: "bolt.slash",
+                    description: Text("This workspace defines no run processes."))
+            }
         }
         .navigationTitle(rec.branch)
         .navigationSubtitle(rec.worktreePath)
@@ -75,10 +88,58 @@ struct WorkspaceDetailView: View {
             }
             field("Port", ":\(rec.port)")
             field("Database", rec.dbName)
-            field("PID", rec.serverPID.map(String.init) ?? "—")
             Spacer()
         }
         .padding()
+    }
+
+    private func processBar(_ name: String) -> some View {
+        HStack(spacing: 12) {
+            Picker(
+                "Process",
+                selection: Binding(
+                    get: { current ?? name },
+                    set: { selectedProcess = $0 })
+            ) {
+                ForEach(processNames, id: \.self) { proc in
+                    Label {
+                        Text(proc)
+                    } icon: {
+                        Image(systemName: "circle.fill")
+                            .foregroundStyle(dotColor(proc))
+                    }
+                    .tag(proc)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            Spacer()
+            Button {
+                run { await project.startProcess(item, name: name) }
+            } label: {
+                Label("Start", systemImage: "play.fill")
+            }
+            Button {
+                run { await project.stopProcess(item, name: name) }
+            } label: {
+                Label("Stop", systemImage: "stop.fill")
+            }
+            Button {
+                run { await project.restartProcess(item, name: name) }
+            } label: {
+                Label("Restart", systemImage: "arrow.clockwise")
+            }
+        }
+        .labelStyle(.titleAndIcon)
+        .padding(.horizontal).padding(.vertical, 6)
+    }
+
+    private func dotColor(_ name: String) -> Color {
+        switch rec.processes.first(where: { $0.name == name })?.status {
+        case .running: return .green
+        case .crashed: return .red
+        default: return .secondary
+        }
     }
 
     private func field(_ k: String, _ v: String) -> some View {
@@ -94,24 +155,16 @@ struct WorkspaceDetailView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             if busy { ProgressView().controlSize(.small) }
-            if rec.status == .running {
-                Button {
-                    run { await project.stopServer(item) }
-                } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                }
-                Button {
-                    run { await project.startOrRestartServer(item) }
-                } label: {
-                    Label("Restart", systemImage: "arrow.clockwise")
-                }
-            } else {
-                Button {
-                    run { await project.startOrRestartServer(item) }
-                } label: {
-                    Label("Start", systemImage: "play.fill")
-                }
-                .disabled(item.orphaned)
+            Button {
+                run { await project.startAll(item) }
+            } label: {
+                Label("Start all", systemImage: "play.fill")
+            }
+            .disabled(item.orphaned)
+            Button {
+                run { await project.stopAll(item) }
+            } label: {
+                Label("Stop all", systemImage: "stop.fill")
             }
             Menu {
                 Button("Reveal in Finder") { reveal() }

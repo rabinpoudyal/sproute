@@ -57,13 +57,13 @@ struct MenuBarRow: View {
                 ProgressView().controlSize(.small)
             } else if item.record.status == .running {
                 Button {
-                    toggle { await project.stopServer(item) }
+                    toggle { await project.stopAll(item) }
                 } label: {
                     Image(systemName: "stop.fill")
                 }
             } else {
                 Button {
-                    toggle { await project.startOrRestartServer(item) }
+                    toggle { await project.startAll(item) }
                 } label: {
                     Image(systemName: "play.fill")
                 }
