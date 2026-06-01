@@ -19,50 +19,57 @@ struct ConfigFormView<Extra: View>: View {
 
     @State private var error: String?
     @State private var saved = false
+    @State private var tab: FormTab = .basic
+
+    private enum FormTab: Hashable { case basic, config, env, hooks }
 
     var body: some View {
+        VStack(spacing: 0) {
+            TabView(selection: $tab) {
+                basicTab
+                    .tabItem { Label("Basic Info", systemImage: "info.circle") }
+                    .tag(FormTab.basic)
+                configTab
+                    .tabItem { Label("Configurations", systemImage: "slider.horizontal.3") }
+                    .tag(FormTab.config)
+                envTab
+                    .tabItem { Label("Environment", systemImage: "key") }
+                    .tag(FormTab.env)
+                hooksTab
+                    .tabItem { Label("Hooks", systemImage: "bolt") }
+                    .tag(FormTab.hooks)
+            }
+        }
+        .safeAreaInset(edge: .bottom) { saveBar }
+    }
+
+    // MARK: tabs
+
+    @ViewBuilder private var basicTab: some View {
         Form {
             Section("Project") {
                 TextField("Name", text: $draft.projectName, prompt: Text("my-app"))
             }
-
             Section("Worktree") {
                 TextField("Base dir", text: $draft.baseDir, prompt: Text("../worktrees"))
                 TextField("Branch prefix", text: $draft.branchPrefix, prompt: Text("feature/"))
             }
-
             Section("Port range") {
                 TextField("Lower", text: $draft.portLower)
                 TextField("Upper", text: $draft.portUpper)
             }
+            extra()
+        }
+        .formStyle(.grouped)
+    }
 
-            Section {
-                ForEach($draft.symlinkSources) { $source in
-                    SymlinkSourceRow(
-                        path: $source.value,
-                        projectRoot: projectRoot,
-                        onDelete: { remove(source.id) })
-                }
-                Button {
-                    draft.symlinkSources.append(.init(value: ""))
-                } label: {
-                    Label("Add source", systemImage: "plus")
-                }
-                TextField("Local file", text: $draft.localFile, prompt: Text(".env.local"))
-            } header: {
-                Text("Symlinked files")
-            } footer: {
-                Text(
-                    "Gitignored secrets identical across branches (e.g. config/master.key). "
-                        + "Missing entries are skipped when linking.")
-            }
-
+    @ViewBuilder private var configTab: some View {
+        Form {
             Section("Database") {
                 TextField("Create", text: $draft.dbCreate)
                 TextField("Drop", text: $draft.dbDrop)
                 TextField("URL template", text: $draft.dbURL)
             }
-
             Section("Setup steps") {
                 ForEach($draft.setup) { $step in
                     HStack {
@@ -84,25 +91,57 @@ struct ConfigFormView<Extra: View>: View {
                     Label("Add step", systemImage: "plus")
                 }
             }
-
             Section("Run") {
                 TextField("Server command", text: $draft.serverCommand)
                     .font(.callout.monospaced())
             }
+        }
+        .formStyle(.grouped)
+    }
 
+    @ViewBuilder private var envTab: some View {
+        Form {
+            Section {
+                ForEach($draft.symlinkSources) { $source in
+                    SymlinkSourceRow(
+                        path: $source.value,
+                        projectRoot: projectRoot,
+                        onDelete: { remove(source.id) })
+                }
+                Button {
+                    draft.symlinkSources.append(.init(value: ""))
+                } label: {
+                    Label("Add source", systemImage: "plus")
+                }
+                TextField("Local file", text: $draft.localFile, prompt: Text(".env.local"))
+            } header: {
+                Text("Symlinked files")
+            } footer: {
+                Text(
+                    "Gitignored secrets identical across branches (e.g. config/master.key). "
+                        + "Missing entries are skipped when linking.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    @ViewBuilder private var hooksTab: some View {
+        Form {
             Section("Hooks (optional)") {
                 TextField("Pre-teardown", text: $draft.preTeardown)
                 TextField("Post-teardown", text: $draft.postTeardown)
             }
+        }
+        .formStyle(.grouped)
+    }
 
-            extra()
+    // MARK: save bar
 
+    private var saveBar: some View {
+        VStack(spacing: 8) {
             if let error {
                 ErrorBanner(error: AppError(title: "Invalid configuration", detail: error))
             }
-        }
-        .formStyle(.grouped)
-        .safeAreaInset(edge: .bottom) {
             HStack {
                 if saved {
                     Label("Saved", systemImage: "checkmark.circle.fill")
@@ -117,9 +156,9 @@ struct ConfigFormView<Extra: View>: View {
                 Button(saveTitle, action: save)
                     .keyboardShortcut(.defaultAction)
             }
-            .padding()
-            .background(.bar)
         }
+        .padding()
+        .background(.bar)
     }
 
     private func remove(_ id: ConfigDraft.Source.ID) {
