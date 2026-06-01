@@ -34,7 +34,7 @@ struct CreateWorkspaceSheet: View {
 
             if creating {
                 Text("Setting up…").font(.caption).foregroundStyle(.secondary)
-                LogConsoleView(buffer: project.logBuffer(branch: branch, process: "create"))
+                LogConsoleView(buffer: project.logBuffer(branch: branch, process: "setup"))
                     .frame(height: 200)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
