@@ -21,26 +21,81 @@ struct ConfigFormView<Extra: View>: View {
     @State private var saved = false
     @State private var tab: FormTab = .basic
 
-    private enum FormTab: Hashable { case basic, config, env, hooks }
+    private enum FormTab: Hashable, CaseIterable {
+        case basic, config, env, hooks
+
+        var title: String {
+            switch self {
+            case .basic: "Basic Info"
+            case .config: "Configurations"
+            case .env: "Environment"
+            case .hooks: "Hooks"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .basic: "info.circle"
+            case .config: "slider.horizontal.3"
+            case .env: "key"
+            case .hooks: "bolt"
+            }
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            TabView(selection: $tab) {
-                basicTab
-                    .tabItem { Label("Basic Info", systemImage: "info.circle") }
-                    .tag(FormTab.basic)
-                configTab
-                    .tabItem { Label("Configurations", systemImage: "slider.horizontal.3") }
-                    .tag(FormTab.config)
-                envTab
-                    .tabItem { Label("Environment", systemImage: "key") }
-                    .tag(FormTab.env)
-                hooksTab
-                    .tabItem { Label("Hooks", systemImage: "bolt") }
-                    .tag(FormTab.hooks)
-            }
+            tabBar
+            Divider()
+            content
         }
         .safeAreaInset(edge: .bottom) { saveBar }
+    }
+
+    // MARK: preference-style tab bar
+
+    private var tabBar: some View {
+        HStack(spacing: 6) {
+            ForEach(FormTab.allCases, id: \.self) { item in
+                tabButton(item)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(.bar)
+    }
+
+    private func tabButton(_ item: FormTab) -> some View {
+        let selected = tab == item
+        return Button {
+            tab = item
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: item.systemImage)
+                    .font(.system(size: 22))
+                    .frame(height: 26)
+                Text(item.title)
+                    .font(.caption)
+            }
+            .frame(width: 96)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(selected ? Color.secondary.opacity(0.2) : .clear)
+            }
+            .foregroundStyle(selected ? Color.accentColor : Color.primary)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder private var content: some View {
+        switch tab {
+        case .basic: basicTab
+        case .config: configTab
+        case .env: envTab
+        case .hooks: hooksTab
+        }
     }
 
     // MARK: tabs
