@@ -66,9 +66,18 @@ public struct WorkspaceManager: Sendable {
     /// `log` routes output per stream so each process (and setup) can be shown in its
     /// own console. `stream` is `"setup"` during setup and the process name while a
     /// `[[run.process]]` runs.
+    ///
+    /// `onProcessExit(name, pid, code)` fires when a started process later exits — most
+    /// importantly when it crashes on startup. The caller uses it to flip the persisted
+    /// `ProcessState` to `.crashed`/`.stopped`; without it a process that dies right after
+    /// launch keeps a stale `.running` status forever (the per-process console still holds
+    /// the stderr, but nothing signals that it died).
     public func create(
         config: Config, repo: URL, base: String, branch: String,
-        log: @escaping @Sendable (_ stream: String, LogLine) -> Void
+        log: @escaping @Sendable (_ stream: String, LogLine) -> Void,
+        onProcessExit: @escaping @Sendable (_ name: String, _ pid: Int32, _ code: Int32) -> Void = {
+            _, _, _ in
+        }
     ) async throws -> WorkspaceRecord {
         let slug = TemplateContext.slugify(branch)
         // Resolve the worktree path up front. A relative `base_dir` (e.g.
@@ -124,7 +133,8 @@ public struct WorkspaceManager: Sendable {
                 let name = proc.name
                 let pid = try await supervisor.start(
                     command: proc.command, ctx: ctx,
-                    cwd: worktreeURL, env: childEnv, onLog: { log(name, $0) })
+                    cwd: worktreeURL, env: childEnv, onLog: { log(name, $0) },
+                    onExit: { pid, code in onProcessExit(name, pid, code) })
                 startedProcesses.append(ProcessState(name: proc.name, pid: pid, status: .running))
             }
             record.processes = startedProcesses

@@ -128,6 +128,29 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     #expect(store.records.isEmpty)
 }
 
+@Test func createReportsProcessCrashViaCallback() async throws {
+    let shell = FakeShellRunner()
+    // server launches (pid 909) then exits nonzero — a crash on startup.
+    shell.handles = [("npm run dev", { FakeProcessHandle(pid: 909, exitCode: 1, lines: []) })]
+    let store = FakeStateStore()
+    let fs = FakeFileSystem(); fs.existing = ["/repo/.env"]
+    let mgr = makeManager(shell: shell, store: store, fs: fs, prober: FreeProber())
+
+    let reported = await withCheckedContinuation {
+        (c: CheckedContinuation<(String, Int32, Int32), Never>) in
+        Task {
+            _ = try? await mgr.create(
+                config: Fixtures.config(), repo: repo,
+                base: "main", branch: "feature/login",
+                log: { _, _ in },
+                onProcessExit: { name, pid, code in c.resume(returning: (name, pid, code)) })
+        }
+    }
+    #expect(reported.0 == "server")
+    #expect(reported.1 == 909)
+    #expect(reported.2 == 1)
+}
+
 private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> WorkspaceRecord {
     let procs = pid.map { [ProcessState(name: "server", pid: $0, status: .running)] } ?? []
     let r = WorkspaceRecord(

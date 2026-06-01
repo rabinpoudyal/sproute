@@ -30,6 +30,24 @@ private func ctx() -> TemplateContext {
     #expect(handle.terminated == true)
 }
 
+@Test func crashingProcessReportsExitToCallback() async throws {
+    let shell = FakeShellRunner()
+    shell.handles = [("npm run dev", { FakeProcessHandle(pid: 909, exitCode: 1, lines: []) })]
+    let sup = ServerSupervisor(shell: shell, renderer: TemplateRenderer())
+    // start returns once the process is launched; the exit is reported asynchronously, so
+    // await the callback before asserting.
+    let reported = await withCheckedContinuation {
+        (c: CheckedContinuation<(Int32, Int32), Never>) in
+        Task {
+            _ = try? await sup.start(
+                command: "npm run dev", ctx: ctx(), cwd: cwd, env: [:],
+                onLog: { _ in }, onExit: { pid, code in c.resume(returning: (pid, code)) })
+        }
+    }
+    #expect(reported == (909, 1))
+    #expect(await sup.status == .crashed)
+}
+
 @Test func rendersServerCommandTemplate() async throws {
     let shell = FakeShellRunner()
     let sup = ServerSupervisor(shell: shell, renderer: TemplateRenderer())

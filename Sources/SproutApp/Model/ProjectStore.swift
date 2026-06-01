@@ -123,14 +123,34 @@ final class ProjectStore: ObservableObject, Identifiable {
         let route: @Sendable (String, LogLine) -> Void = { [weak self] stream, line in
             Task { @MainActor in self?.logBuffer(branch: branch, process: stream).append(line) }
         }
+        let onExit: @Sendable (String, Int32, Int32) -> Void = { [weak self] name, pid, code in
+            Task { @MainActor in
+                self?.handleProcessExit(branch: branch, name: name, pid: pid, code: code)
+            }
+        }
         do {
             _ = try await manager.create(
                 config: config, repo: rootURL,
-                base: base, branch: branch, log: route)
+                base: base, branch: branch, log: route, onProcessExit: onExit)
             refresh()
         } catch {
             lastError = AppError(error)
         }
+    }
+
+    /// A started process exited. Flip its persisted state to `.crashed` (nonzero) or
+    /// `.stopped` (clean) so the UI stops showing a dead process as running. Guarded by a
+    /// pid match so a late exit from a process we already stopped or restarted is ignored.
+    private func handleProcessExit(branch: String, name: String, pid: Int32, code: Int32) {
+        guard var rec = try? store.load().first(where: { $0.branch == branch }),
+            let i = rec.processes.firstIndex(where: { $0.name == name }),
+            rec.processes[i].pid == pid
+        else { return }
+        rec.processes[i].status = (code == 0) ? .stopped : .crashed
+        rec.processes[i].pid = nil
+        rec.status = aggregateStatus(rec.processes)
+        try? store.upsert(rec)
+        refresh()
     }
 
     /// Look up a process's command from config; nil if the name is unknown.
@@ -147,11 +167,18 @@ final class ProjectStore: ObservableObject, Identifiable {
             await PosixProcessTerminator().terminate(pid: existing, graceSeconds: 5)
         }
         let sup = ServerSupervisor(shell: shell, renderer: renderer)
+        let branch = rec.branch
+        let onExit: @Sendable (Int32, Int32) -> Void = { [weak self] pid, code in
+            Task { @MainActor in
+                self?.handleProcessExit(branch: branch, name: name, pid: pid, code: code)
+            }
+        }
         do {
             let pid = try await sup.start(
                 command: command, ctx: context(rec),
                 cwd: URL(fileURLWithPath: rec.worktreePath),
-                env: childEnv(rec), onLog: onLog(branch: rec.branch, process: name))
+                env: childEnv(rec), onLog: onLog(branch: rec.branch, process: name),
+                onExit: onExit)
             supervisors[key] = sup
             upsertProcess(&rec, ProcessState(name: name, pid: pid, status: .running))
             try store.upsert(rec)
