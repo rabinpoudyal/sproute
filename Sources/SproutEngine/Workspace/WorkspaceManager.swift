@@ -61,8 +61,16 @@ public struct WorkspaceManager: Sendable {
     public func create(config: Config, repo: URL, base: String, branch: String,
                        onLog: @escaping @Sendable (LogLine) -> Void) async throws -> WorkspaceRecord {
         let slug = TemplateContext.slugify(branch)
-        let worktreePath = "\(config.worktree.baseDir)/\(slug)"
-        let worktreeURL = URL(fileURLWithPath: worktreePath)
+        // Resolve the worktree path up front. A relative `base_dir` (e.g.
+        // "../worktrees") must be resolved against the repo, not the process cwd:
+        // git resolves it relative to the repo, but URL(fileURLWithPath:) would use
+        // the cwd, so the two would disagree and EnvLinker would write into a path
+        // that was never created. Anchoring to `repo` keeps every step consistent.
+        let rawPath = "\(config.worktree.baseDir)/\(slug)"
+        let worktreeURL = (rawPath.hasPrefix("/")
+            ? URL(fileURLWithPath: rawPath)
+            : repo.appendingPathComponent(rawPath)).standardizedFileURL
+        let worktreePath = worktreeURL.path
         let dbName = "\(config.project.name)_\(slug)"
 
         // Track what to roll back, in reverse order.
