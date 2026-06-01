@@ -1,0 +1,30 @@
+[project]
+name = "shop"
+
+[worktree]
+base_dir = "../sprout-worktrees"
+branch_prefix = "feature/"
+
+[port]
+lower = 4000
+upper = 4050
+
+[env]
+symlink_sources = [".env"]
+local_file = ".env.local"
+
+[database]
+create_command = "createdb {{db_name}}"
+drop_command = "dropdb --if-exists {{db_name}}"
+url_template = "postgres://localhost/{{db_name}}"
+
+[[setup]]
+name = "deps"
+command = "npm ci"
+
+[[setup]]
+name = "migrate"
+command = "npm run migrate"
+
+[run]
+server_command = "npm run dev"
