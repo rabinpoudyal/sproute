@@ -73,7 +73,6 @@ private let sampleTOML = """
         drop_command = "dropdb --if-exists {{db_name}}"
         url_template = "postgres://localhost/{{db_name}}"
         [run]
-        server_command = "npm run dev"
         [[run.process]]
         name = "server"
         command = "bin/rails server -p {{port}}"
