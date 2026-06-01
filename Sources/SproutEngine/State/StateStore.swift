@@ -23,19 +23,17 @@ public struct WorkspaceRecord: Codable, Sendable, Equatable {
     public var port: Int
     public var dbName: String
     public var status: WorkspaceStatus
-    public var serverPID: Int32?
     public var processes: [ProcessState]
     public var createdAt: Date
 
     public init(
         id: UUID, branch: String, base: String, worktreePath: String,
         port: Int, dbName: String, status: WorkspaceStatus,
-        serverPID: Int32?, createdAt: Date, processes: [ProcessState] = []
+        createdAt: Date, processes: [ProcessState] = []
     ) {
         self.id = id; self.branch = branch; self.base = base
         self.worktreePath = worktreePath; self.port = port; self.dbName = dbName
-        self.status = status; self.serverPID = serverPID; self.createdAt = createdAt
-        self.processes = processes
+        self.status = status; self.createdAt = createdAt; self.processes = processes
     }
 
     public init(from decoder: Decoder) throws {
@@ -47,7 +45,6 @@ public struct WorkspaceRecord: Codable, Sendable, Equatable {
         port = try c.decode(Int.self, forKey: .port)
         dbName = try c.decode(String.self, forKey: .dbName)
         status = try c.decode(WorkspaceStatus.self, forKey: .status)
-        serverPID = try c.decodeIfPresent(Int32.self, forKey: .serverPID)
         processes = try c.decodeIfPresent([ProcessState].self, forKey: .processes) ?? []
         createdAt = try c.decode(Date.self, forKey: .createdAt)
     }

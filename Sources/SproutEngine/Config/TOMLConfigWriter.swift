@@ -38,7 +38,6 @@ public enum TOMLConfigWriter {
         root["setup"] = setup
 
         let run = TOMLTable()
-        run["server_command"] = config.run.serverCommand
         let procs = TOMLArray()
         for p in config.run.processes {
             procs.append(TOMLTable(["name": p.name, "command": p.command]))

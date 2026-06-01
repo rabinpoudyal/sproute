@@ -10,8 +10,7 @@ private struct StubProber: PortProber {
 private func record(port: Int) -> WorkspaceRecord {
     WorkspaceRecord(
         id: UUID(), branch: "b", base: "main", worktreePath: "/x",
-        port: port, dbName: "d", status: .running,
-        serverPID: nil, createdAt: Date())
+        port: port, dbName: "d", status: .running, createdAt: Date())
 }
 
 @Test func allocatesFirstFreePort() throws {

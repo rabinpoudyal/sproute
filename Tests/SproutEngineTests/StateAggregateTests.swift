@@ -31,11 +31,11 @@ import Foundation
 }
 
 @Test func recordDecodesWithoutProcessesKey() throws {
-    // Existing on-disk state has serverPID and no processes key.
+    // Existing on-disk state has a legacy key and no processes key; both are tolerated.
     let json = """
         {"id":"00000000-0000-0000-0000-000000000000","branch":"b","base":"main",
          "worktreePath":"/wt/b","port":4000,"dbName":"d","status":"stopped",
-         "serverPID":123,"createdAt":"1970-01-01T00:00:00Z"}
+         "serverPid":123,"createdAt":"1970-01-01T00:00:00Z"}
         """
     let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
     let rec = try dec.decode(WorkspaceRecord.self, from: Data(json.utf8))

@@ -39,7 +39,7 @@ public enum TOMLConfigLoader {
         let portT = try tbl("port")
         let envT = try tbl("env")
         let dbT = try tbl("database")
-        let runT = try tbl("run")
+        let runT = table["run"]?.table
 
         let sources: [String] = (envT["symlink_sources"]?.array?.compactMap { $0.string }) ?? []
 
@@ -57,7 +57,7 @@ public enum TOMLConfigLoader {
         }
 
         var processes: [ProcessConfig] = []
-        if let arr = runT["process"]?.array {
+        if let arr = runT?["process"]?.array {
             for entry in arr {
                 guard let pt = entry.table,
                     let name = pt["name"]?.string,
@@ -90,9 +90,7 @@ public enum TOMLConfigLoader {
                 dropCommand: try str(dbT, "drop_command", "database.drop_command"),
                 urlTemplate: try str(dbT, "url_template", "database.url_template")),
             setup: steps,
-            run: RunConfig(
-                serverCommand: try str(runT, "server_command", "run.server_command"),
-                processes: processes),
+            run: RunConfig(processes: processes),
             hooks: hooks)
     }
 }

@@ -104,7 +104,6 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     var twoProcessConfig = Fixtures.config()
     twoProcessConfig.setup = []
     twoProcessConfig.run = RunConfig(
-        serverCommand: "npm run dev",
         processes: [
             ProcessConfig(name: "web", command: "npm run web"),
             ProcessConfig(name: "worker", command: "npm run worker"),
@@ -134,7 +133,7 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
     let r = WorkspaceRecord(
         id: UUID(), branch: "feature/login", base: "main",
         worktreePath: "/wt/feature_login", port: 4000, dbName: "shop_feature_login",
-        status: .running, serverPID: nil, createdAt: Date(), processes: procs)
+        status: .running, createdAt: Date(), processes: procs)
     store.records = [r]
     return r
 }

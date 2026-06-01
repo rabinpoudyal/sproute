@@ -19,7 +19,7 @@ import Foundation
         #expect(parsed.database.dropCommand == original.database.dropCommand)
         #expect(parsed.database.urlTemplate == original.database.urlTemplate)
         #expect(parsed.setup == original.setup)
-        #expect(parsed.run.serverCommand == original.run.serverCommand)
+        #expect(parsed.run.processes == original.run.processes)
     }
 
     @Test func roundTripsHooksWhenPresent() throws {

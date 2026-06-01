@@ -31,9 +31,6 @@ private let sampleTOML = """
     name = "migrate"
     command = "npm run migrate"
 
-    [run]
-    server_command = "npm run dev"
-
     [hooks]
     post_teardown = "echo bye"
     """
@@ -48,7 +45,7 @@ private let sampleTOML = """
     #expect(config.env.localFile == ".env.local")
     #expect(config.database.createCommand == "createdb {{db_name}}")
     #expect(config.setup.map(\.name) == ["deps", "migrate"])
-    #expect(config.run.serverCommand == "npm run dev")
+    #expect(config.run.processes.isEmpty)
     #expect(config.hooks.postTeardown == "echo bye")
     #expect(config.hooks.preTeardown == nil)
 }

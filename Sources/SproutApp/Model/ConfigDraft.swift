@@ -66,7 +66,7 @@ final class ConfigDraft: ObservableObject {
                     dropCommand: "dropdb --if-exists {{db_name}}",
                     urlTemplate: "postgres://localhost/{{db_name}}"),
                 setup: [],
-                run: RunConfig(serverCommand: "", processes: []),
+                run: RunConfig(processes: []),
                 hooks: HooksConfig()))
     }
 
@@ -117,7 +117,7 @@ final class ConfigDraft: ObservableObject {
             database: DatabaseConfig(
                 createCommand: dbCreate, dropCommand: dbDrop, urlTemplate: dbURL),
             setup: steps,
-            run: RunConfig(serverCommand: "", processes: procs),
+            run: RunConfig(processes: procs),
             hooks: HooksConfig(
                 preTeardown: optional(preTeardown), postTeardown: optional(postTeardown)))
     }

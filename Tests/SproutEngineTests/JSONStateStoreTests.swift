@@ -11,8 +11,8 @@ private func sampleRecord(branch: String = "feature/login") -> WorkspaceRecord {
     WorkspaceRecord(
         id: UUID(), branch: branch, base: "main",
         worktreePath: "/wt/\(branch)", port: 4001, dbName: "shop_x",
-        status: .running, serverPID: 123, createdAt: Date(timeIntervalSince1970: 0)
-    )
+        status: .running, createdAt: Date(timeIntervalSince1970: 0),
+        processes: [ProcessState(name: "server", pid: 123, status: .running)])
 }
 
 @Test func loadReturnsEmptyWhenFileMissing() throws {

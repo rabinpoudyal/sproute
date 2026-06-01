@@ -18,9 +18,7 @@ enum Fixtures {
                 SetupStep(name: "deps", command: "npm ci"),
                 SetupStep(name: "migrate", command: "npm run migrate"),
             ],
-            run: RunConfig(
-                serverCommand: "npm run dev",
-                processes: [ProcessConfig(name: "server", command: "npm run dev")]),
+            run: RunConfig(processes: [ProcessConfig(name: "server", command: "npm run dev")]),
             hooks: HooksConfig()
         )
     }

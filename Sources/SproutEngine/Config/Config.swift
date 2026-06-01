@@ -74,11 +74,8 @@ public struct ProcessConfig: Sendable, Equatable {
 }
 
 public struct RunConfig: Sendable {
-    public var serverCommand: String  // template, long-running (legacy; removed in cleanup)
     public var processes: [ProcessConfig]
-    public init(serverCommand: String, processes: [ProcessConfig] = []) {
-        self.serverCommand = serverCommand; self.processes = processes
-    }
+    public init(processes: [ProcessConfig]) { self.processes = processes }
 }
 
 public struct HooksConfig: Sendable {

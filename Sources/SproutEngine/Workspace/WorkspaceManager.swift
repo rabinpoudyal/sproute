@@ -108,7 +108,7 @@ public struct WorkspaceManager: Sendable {
             var record = WorkspaceRecord(
                 id: UUID(), branch: branch, base: base, worktreePath: worktreePath,
                 port: port, dbName: dbName, status: .creating,
-                serverPID: nil, createdAt: Date())
+                createdAt: Date())
             try store.upsert(record)
 
             let childEnv = ["PORT": String(port), "DATABASE_URL": dbURL]
