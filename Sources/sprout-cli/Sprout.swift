@@ -61,8 +61,8 @@ struct Create: AsyncParsableCommand {
         let rec = try await mgr.create(
             config: config, repo: repoURL(),
             base: base, branch: branch, onLog: printLog)
-        print(
-            "created \(rec.branch)  port=\(rec.port)  db=\(rec.dbName)  pid=\(rec.serverPID ?? -1)")
+        let procs = rec.processes.map { "\($0.name):\($0.pid ?? -1)" }.joined(separator: ",")
+        print("created \(rec.branch)  port=\(rec.port)  db=\(rec.dbName)  [\(procs)]")
     }
 }
 
@@ -70,9 +70,8 @@ struct List: AsyncParsableCommand {
     func run() async throws {
         let store = JSONStateStore(fileURL: stateURL())
         for r in try store.load() {
-            print(
-                "\(r.id)  \(r.branch)  :\(r.port)  \(r.dbName)  \(r.status.rawValue)  pid=\(r.serverPID ?? -1)"
-            )
+            let procs = r.processes.map { "\($0.name):\($0.pid ?? -1)" }.joined(separator: ",")
+            print("\(r.id)  \(r.branch)  :\(r.port)  \(r.dbName)  \(r.status.rawValue)  [\(procs)]")
         }
     }
 }
@@ -80,6 +79,8 @@ struct List: AsyncParsableCommand {
 struct Server: AsyncParsableCommand {
     @Argument var id: String
     @Argument var action: String  // "stop" | "restart"
+    @Option(name: .long) var process: String?
+
     func run() async throws {
         let config = try loadConfig()
         let store = JSONStateStore(fileURL: stateURL())
@@ -89,28 +90,42 @@ struct Server: AsyncParsableCommand {
             throw ValidationError("workspace not found: \(id)")
         }
         let shell = LoginShellRunner()
-        let sup = ServerSupervisor(shell: shell, renderer: TemplateRenderer())
+        let renderer = TemplateRenderer()
         let ctx = TemplateContext(
             project: config.project.name, branch: rec.branch,
             port: rec.port, dbName: rec.dbName, worktree: rec.worktreePath)
         let wt = URL(fileURLWithPath: rec.worktreePath)
         let env = [
             "PORT": String(rec.port),
-            "DATABASE_URL": DatabaseService(shell: shell, renderer: TemplateRenderer())
+            "DATABASE_URL": DatabaseService(shell: shell, renderer: renderer)
                 .databaseURL(config.database, ctx: ctx),
         ]
-        // stop the old PID if any
-        if let pid = rec.serverPID {
-            await PosixProcessTerminator().terminate(pid: pid, graceSeconds: 5)
+
+        // Which configured processes to act on.
+        let targets = config.run.processes.filter { process == nil || $0.name == process }
+        if targets.isEmpty { throw ValidationError("no matching process: \(process ?? "*")") }
+
+        for proc in targets {
+            // stop the existing pid for this process, if any
+            if let pid = rec.processes.first(where: { $0.name == proc.name })?.pid {
+                await PosixProcessTerminator().terminate(pid: pid, graceSeconds: 5)
+            }
+            let new: ProcessState
+            if action == "restart" {
+                let sup = ServerSupervisor(shell: shell, renderer: renderer)
+                let pid = try await sup.start(
+                    command: proc.command, ctx: ctx, cwd: wt, env: env, onLog: printLog)
+                new = ProcessState(name: proc.name, pid: pid, status: .running)
+            } else {
+                new = ProcessState(name: proc.name, pid: nil, status: .stopped)
+            }
+            if let i = rec.processes.firstIndex(where: { $0.name == proc.name }) {
+                rec.processes[i] = new
+            } else {
+                rec.processes.append(new)
+            }
         }
-        if action == "restart" {
-            let pid = try await sup.start(
-                command: config.run.serverCommand, ctx: ctx,
-                cwd: wt, env: env, onLog: printLog)
-            rec.serverPID = pid; rec.status = .running
-        } else {
-            rec.serverPID = nil; rec.status = .stopped
-        }
+        rec.status = aggregateStatus(rec.processes)
         try store.upsert(rec)
         print("\(action) ok")
     }
