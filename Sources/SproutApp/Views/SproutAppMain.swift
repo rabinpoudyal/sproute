@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Identifies a detached log window: a workspace branch within a project.
 struct LogTarget: Identifiable, Hashable, Codable {
@@ -7,8 +8,19 @@ struct LogTarget: Identifiable, Hashable, Codable {
     var id: String { "\(projectID)#\(branch)" }
 }
 
+/// Forces a normal foreground app. Without this the `MenuBarExtra` can make the
+/// process launch as an accessory (menu-bar) app, leaving the main window
+/// non-key so text fields never receive keyboard input.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
 @main
 struct SproutAppMain: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var app = AppModel()
 
     var body: some Scene {

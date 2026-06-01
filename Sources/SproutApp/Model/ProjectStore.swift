@@ -18,7 +18,7 @@ final class ProjectStore: ObservableObject, Identifiable {
 
     @Published private(set) var workspaces: [WorkspaceItem] = []
     @Published private(set) var doctor: [ToolCheck] = []
-    @Published var lastError: String?
+    @Published var lastError: AppError?
 
     private let shell = LoginShellRunner()
     private let renderer = TemplateRenderer()
@@ -77,7 +77,7 @@ final class ProjectStore: ObservableObject, Identifiable {
             let reconciled = try manager.reconcile()
             workspaces = reconciled.map { WorkspaceItem(record: $0.record, orphaned: $0.orphaned) }
         } catch {
-            lastError = "\(error)"
+            lastError = AppError(error)
         }
     }
 
@@ -111,7 +111,7 @@ final class ProjectStore: ObservableObject, Identifiable {
                                          base: base, branch: branch, onLog: log)
             refresh()
         } catch {
-            lastError = "\(error)"
+            lastError = AppError(error)
         }
     }
 
@@ -133,7 +133,7 @@ final class ProjectStore: ObservableObject, Identifiable {
             try store.upsert(rec)
             refresh()
         } catch {
-            lastError = "\(error)"
+            lastError = AppError(error)
         }
     }
 
@@ -157,7 +157,7 @@ final class ProjectStore: ObservableObject, Identifiable {
                 .push(worktree: URL(fileURLWithPath: item.record.worktreePath),
                       branch: item.record.branch)
         } catch {
-            lastError = "\(error)"
+            lastError = AppError(error)
         }
     }
 
@@ -168,7 +168,7 @@ final class ProjectStore: ObservableObject, Identifiable {
             supervisors[item.record.branch] = nil
             refresh()
         } catch {
-            lastError = "\(error)"
+            lastError = AppError(error)
         }
     }
 }

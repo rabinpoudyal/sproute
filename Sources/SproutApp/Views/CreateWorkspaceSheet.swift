@@ -39,7 +39,7 @@ struct CreateWorkspaceSheet: View {
             }
 
             if let err = project.lastError {
-                Text(err).font(.caption).foregroundStyle(.red).lineLimit(3)
+                ErrorBanner(error: err)
             }
 
             HStack {
