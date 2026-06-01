@@ -1,6 +1,15 @@
 import Foundation
 @testable import SproutEngine
 
+/// Thread-safe sink for streamed log lines (Swift 6: can't mutate a captured `var`
+/// inside a `@Sendable` closure).
+final class LogCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _texts: [String] = []
+    func append(_ text: String) { lock.lock(); _texts.append(text); lock.unlock() }
+    var texts: [String] { lock.lock(); defer { lock.unlock() }; return _texts }
+}
+
 final class FakeStateStore: StateStore, @unchecked Sendable {
     var records: [WorkspaceRecord] = []
     func load() throws -> [WorkspaceRecord] { records }
