@@ -49,7 +49,7 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     #expect(rec.port == 4000)
     #expect(rec.dbName == "shop_feature_login")
     #expect(rec.status == .running)
-    #expect(rec.serverPID == 900)
+    #expect(rec.processes == [ProcessState(name: "server", pid: 900, status: .running)])
     #expect(store.records.count == 1)
     // worktree created under baseDir/branch_slug
     #expect(rec.worktreePath == "/wt/feature_login")
@@ -100,10 +100,11 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
 }
 
 private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> WorkspaceRecord {
+    let procs = pid.map { [ProcessState(name: "server", pid: $0, status: .running)] } ?? []
     let r = WorkspaceRecord(
         id: UUID(), branch: "feature/login", base: "main",
         worktreePath: "/wt/feature_login", port: 4000, dbName: "shop_feature_login",
-        status: .running, serverPID: pid, createdAt: Date())
+        status: .running, serverPID: nil, createdAt: Date(), processes: procs)
     store.records = [r]
     return r
 }

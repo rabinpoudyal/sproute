@@ -115,12 +115,16 @@ public struct WorkspaceManager: Sendable {
                 config.setup, ctx: ctx, cwd: worktreeURL,
                 env: childEnv, onLog: onLog)
 
-            let supervisor = ServerSupervisor(shell: shell, renderer: renderer)
-            let pid = try await supervisor.start(
-                command: config.run.serverCommand, ctx: ctx,
-                cwd: worktreeURL, env: childEnv, onLog: onLog)
-            record.serverPID = pid
-            record.status = .running
+            var processes: [ProcessState] = []
+            for proc in config.run.processes {
+                let supervisor = ServerSupervisor(shell: shell, renderer: renderer)
+                let pid = try await supervisor.start(
+                    command: proc.command, ctx: ctx,
+                    cwd: worktreeURL, env: childEnv, onLog: onLog)
+                processes.append(ProcessState(name: proc.name, pid: pid, status: .running))
+            }
+            record.processes = processes
+            record.status = aggregateStatus(processes)
             try store.upsert(record)
             return record
         } catch {
@@ -186,9 +190,11 @@ public struct WorkspaceManager: Sendable {
             try await git.push(worktree: worktreeURL, branch: record.branch)
         }
 
-        // stop server
-        if let pid = record.serverPID {
-            await terminator.terminate(pid: pid, graceSeconds: 5)
+        // stop every process
+        for proc in record.processes {
+            if let pid = proc.pid {
+                await terminator.terminate(pid: pid, graceSeconds: 5)
+            }
         }
         // drop DB
         try await database.drop(config.database, ctx: ctx, cwd: repo)
@@ -208,10 +214,17 @@ public struct WorkspaceManager: Sendable {
     public func reconcile() throws -> [ReconciledWorkspace] {
         var out: [ReconciledWorkspace] = []
         for var record in try store.load() {
-            let alive = record.serverPID.map { checker.isAlive(pid: $0) } ?? false
-            if !alive, record.status == .running {
-                record.status = .stopped
-                record.serverPID = nil
+            var changed = false
+            for i in record.processes.indices {
+                guard let pid = record.processes[i].pid else { continue }
+                if !checker.isAlive(pid: pid), record.processes[i].status == .running {
+                    record.processes[i].status = .stopped
+                    record.processes[i].pid = nil
+                    changed = true
+                }
+            }
+            if changed, record.status != .creating, record.status != .tearingDown {
+                record.status = aggregateStatus(record.processes)
                 try store.upsert(record)
             }
             let orphaned = !fs.fileExists(URL(fileURLWithPath: record.worktreePath))
