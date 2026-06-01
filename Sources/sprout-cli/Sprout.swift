@@ -82,6 +82,9 @@ struct Server: AsyncParsableCommand {
     @Option(name: .long) var process: String?
 
     func run() async throws {
+        guard action == "stop" || action == "restart" else {
+            throw ValidationError("action must be 'stop' or 'restart', got: \(action)")
+        }
         let config = try loadConfig()
         let store = JSONStateStore(fileURL: stateURL())
         guard let uuid = UUID(uuidString: id),
