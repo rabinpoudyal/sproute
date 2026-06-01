@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "SproutEngine", targets: ["SproutEngine"]),
         .executable(name: "sprout", targets: ["sprout-cli"]),
+        .executable(name: "SproutApp", targets: ["SproutApp"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
@@ -24,6 +25,10 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
+        .executableTarget(
+            name: "SproutApp",
+            dependencies: ["SproutEngine"]
+        ),
         .testTarget(
             name: "SproutEngineTests",
             dependencies: ["SproutEngine"],
@@ -37,6 +42,10 @@ let package = Package(
                     "-Xlinker", "-rpath", "-Xlinker", "/Library/Developer/CommandLineTools/Library/Developer/usr/lib",
                 ]),
             ]
+        ),
+        .testTarget(
+            name: "SproutAppTests",
+            dependencies: ["SproutApp"]
         ),
     ]
 )
