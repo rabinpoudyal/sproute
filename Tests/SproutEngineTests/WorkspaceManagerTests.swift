@@ -69,6 +69,26 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     #expect(cmds.contains("git worktree remove --force '/wt/feature_login'"))
 }
 
+@Test func createRollbackDeletesBranchPrunesAndRemovesLeftoverDir() async throws {
+    let shell = FakeShellRunner()
+    shell.handles = [("npm run migrate", { FakeProcessHandle(pid: 1, exitCode: 1, lines: []) })]
+    let store = FakeStateStore()
+    // worktree dir lingers after `git worktree remove` (simulates a partial/failed add)
+    let fs = FakeFileSystem(); fs.existing = ["/wt/feature_login"]
+    let mgr = makeManager(shell: shell, store: store, fs: fs, prober: FreeProber())
+
+    await #expect(throws: SetupError.self) {
+        _ = try await mgr.create(config: Fixtures.config(), repo: repo,
+                                 base: "main", branch: "feature/login") { _ in }
+    }
+    let cmds = shell.calls.map(\.command)
+    #expect(cmds.contains("git worktree remove --force '/wt/feature_login'"))
+    #expect(cmds.contains("git worktree prune"))
+    #expect(cmds.contains("git branch -D 'feature/login'"))   // -b created it; clean for retry
+    #expect(fs.removed.contains("/wt/feature_login"))          // leftover dir force-removed
+    #expect(store.records.isEmpty)
+}
+
 private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> WorkspaceRecord {
     let r = WorkspaceRecord(
         id: UUID(), branch: "feature/login", base: "main",

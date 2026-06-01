@@ -42,6 +42,11 @@ public struct GitService: Sendable {
         try await runChecked("git worktree remove --force \(q(path))", cwd: repo)
     }
 
+    /// Prune administrative records for worktrees whose directory is gone.
+    public func pruneWorktrees(repo: URL) async throws {
+        try await runChecked("git worktree prune", cwd: repo)
+    }
+
     public func isDirty(worktree: URL) async throws -> Bool {
         let r = try await runChecked("git status --porcelain", cwd: worktree)
         return !r.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

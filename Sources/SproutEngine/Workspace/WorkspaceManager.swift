@@ -121,8 +121,19 @@ public struct WorkspaceManager: Sendable {
                               dbName: dbName, worktree: worktreePath)
             try? await database.drop(config.database, ctx: ctx, cwd: repo)
         }
+        // Clean up the worktree directory no matter how far creation got, so a retry
+        // is not blocked by a leftover dir. `git worktree add` may have created the
+        // directory even when a later step failed.
+        let worktreeURL = URL(fileURLWithPath: worktreePath)
+        try? await git.worktreeRemove(repo: repo, path: worktreePath)
+        if fs.fileExists(worktreeURL) {
+            try? fs.removeItem(worktreeURL)
+        }
+        try? await git.pruneWorktrees(repo: repo)
+        // `worktree add -b` created the branch, so a successful add means we own it;
+        // delete it so retrying the same branch name does not fail.
         if didWorktree {
-            try? await git.worktreeRemove(repo: repo, path: worktreePath)
+            try? await git.deleteBranch(repo: repo, branch: branch)
         }
     }
 
