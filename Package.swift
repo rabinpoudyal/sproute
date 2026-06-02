@@ -12,6 +12,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
         .package(url: "https://github.com/LebJe/TOMLKit", from: "0.6.0"),
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.13.0"),
     ],
     targets: [
         .target(
@@ -27,7 +28,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "SproutApp",
-            dependencies: ["SproutEngine"]
+            dependencies: [
+                "SproutEngine",
+                .product(name: "SwiftTerm", package: "SwiftTerm"),
+            ]
         ),
         .testTarget(
             name: "SproutEngineTests",
