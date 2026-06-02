@@ -41,10 +41,28 @@ public struct ForkPTYSpawner: PTYSpawner {
     }
 }
 
+/// Idempotent, thread-safe close of the pty master fd. Shared between the output read
+/// loop (which closes on natural exit / EOF) and `terminate`, so whichever finishes first
+/// closes the fd exactly once.
+private final class MasterFDCloser: @unchecked Sendable {
+    let fd: Int32
+    private let lock = NSLock()
+    private var closed = false
+    init(fd: Int32) { self.fd = fd }
+    func close() {
+        lock.lock()
+        defer { lock.unlock() }
+        if closed { return }
+        closed = true
+        Darwin.close(fd)
+    }
+}
+
 final class ForkPTYProcess: PTYHandle, @unchecked Sendable {
     let pid: Int32
     let output: AsyncStream<Data>
     private let masterFD: Int32
+    private let masterCloser: MasterFDCloser
 
     init(shellPath: String, command: String, cwd: String, env: [String: String]) throws {
         // Build all C arrays BEFORE forking — only async-signal-safe calls (chdir, execve,
@@ -75,6 +93,8 @@ final class ForkPTYProcess: PTYHandle, @unchecked Sendable {
 
         self.pid = childPid
         self.masterFD = master
+        let closer = MasterFDCloser(fd: master)
+        self.masterCloser = closer
         let fd = master
         self.output = AsyncStream { cont in
             DispatchQueue.global().async {
@@ -85,6 +105,7 @@ final class ForkPTYProcess: PTYHandle, @unchecked Sendable {
                     cont.yield(Data(buf[0..<n]))
                 }
                 cont.finish()
+                closer.close()  // natural exit: the user typed `exit`/Ctrl-D or it crashed
             }
         }
     }
@@ -107,7 +128,7 @@ final class ForkPTYProcess: PTYHandle, @unchecked Sendable {
         kill(-pid, SIGTERM)
         try? await Task.sleep(nanoseconds: UInt64(graceSeconds * 1_000_000_000))
         if kill(-pid, 0) == 0 { kill(-pid, SIGKILL) }
-        close(masterFD)
+        masterCloser.close()
     }
 
     func waitForExit() async -> Int32 {
