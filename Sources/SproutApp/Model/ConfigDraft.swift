@@ -33,6 +33,8 @@ final class ConfigDraft: ObservableObject {
     @Published var dbURL: String
     @Published var setup: [Step]
     @Published var processes: [ProcessRow]
+    /// Carried through unchanged (no form UI yet) so saving never drops [[run.console]].
+    private var consoles: [ConsoleConfig]
     @Published var preTeardown: String
     @Published var postTeardown: String
 
@@ -49,6 +51,7 @@ final class ConfigDraft: ObservableObject {
         dbURL = c.database.urlTemplate
         setup = c.setup.map { Step(name: $0.name, command: $0.command) }
         processes = c.run.processes.map { ProcessRow(name: $0.name, command: $0.command) }
+        consoles = c.run.consoles
         preTeardown = c.hooks.preTeardown ?? ""
         postTeardown = c.hooks.postTeardown ?? ""
     }
@@ -117,7 +120,7 @@ final class ConfigDraft: ObservableObject {
             database: DatabaseConfig(
                 createCommand: dbCreate, dropCommand: dbDrop, urlTemplate: dbURL),
             setup: steps,
-            run: RunConfig(processes: procs),
+            run: RunConfig(processes: procs, consoles: consoles),
             hooks: HooksConfig(
                 preTeardown: optional(preTeardown), postTeardown: optional(postTeardown)))
     }
