@@ -161,11 +161,13 @@ struct WorkspaceDetailView: View {
                 Label("Start all", systemImage: "play.fill")
             }
             .disabled(item.orphaned)
+            .help("Start all processes")
             Button {
                 run { await project.stopAll(item) }
             } label: {
                 Label("Stop all", systemImage: "stop.fill")
             }
+            .help("Stop all processes")
             Menu {
                 Button("Reveal in Finder") { reveal() }
                 Button("Open in Editor") { openInEditor() }
@@ -177,6 +179,7 @@ struct WorkspaceDetailView: View {
             } label: {
                 Label("Actions", systemImage: "ellipsis.circle")
             }
+            .help("More actions")
         }
     }
 

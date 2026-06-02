@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SproutEngine
 
@@ -11,6 +12,10 @@ final class AppModel: ObservableObject {
     @Published var registryError: String?
 
     private var registry: ProjectRegistry
+    /// Re-publish each child store's changes as our own. Without this, a `@Published`
+    /// change inside a single ProjectStore (e.g. `workspaces` after teardown) never
+    /// reaches views that observe AppModel — the sidebar and detail router are stale.
+    private var storeSubscriptions: [AnyCancellable] = []
 
     init() {
         registry = ProjectRegistry.load(from: SproutPaths.registryFile)
@@ -26,6 +31,11 @@ final class AppModel: ObservableObject {
             stores.append(ProjectStore(rootURL: root, config: config))
         }
         projects = stores
+        storeSubscriptions = stores.map { store in
+            store.objectWillChange.sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+        }
         for p in projects { p.refresh() }
     }
 

@@ -52,11 +52,19 @@ public struct LoginShellRunner: ShellRunner {
 final class PosixSpawnedProcess: ProcessHandle, @unchecked Sendable {
     let pid: Int32
     let logs: AsyncStream<LogLine>
+    /// Write end of the child's stdin. We never write to it, but holding it open
+    /// keeps the child's stdin from hitting EOF. Watch-mode dev servers (esbuild,
+    /// vite) self-terminate when stdin closes; a GUI app's inherited fd 0 is already
+    /// closed, so without this the watcher dies on spawn.
+    private let stdinWriteFD: Int32
 
     init(shellPath: String, command: String, cwd: String, env: [String: String]) throws {
         var outPipe: [Int32] = [0, 0]
         var errPipe: [Int32] = [0, 0]
-        guard pipe(&outPipe) == 0, pipe(&errPipe) == 0 else { throw ShellSpawnError.pipeFailed }
+        var inPipe: [Int32] = [0, 0]
+        guard pipe(&outPipe) == 0, pipe(&errPipe) == 0, pipe(&inPipe) == 0 else {
+            throw ShellSpawnError.pipeFailed
+        }
 
         var attr: posix_spawnattr_t?
         posix_spawnattr_init(&attr)
@@ -64,8 +72,11 @@ final class PosixSpawnedProcess: ProcessHandle, @unchecked Sendable {
 
         var actions: posix_spawn_file_actions_t?
         posix_spawn_file_actions_init(&actions)
+        posix_spawn_file_actions_adddup2(&actions, inPipe[0], 0)
         posix_spawn_file_actions_adddup2(&actions, outPipe[1], 1)
         posix_spawn_file_actions_adddup2(&actions, errPipe[1], 2)
+        posix_spawn_file_actions_addclose(&actions, inPipe[0])
+        posix_spawn_file_actions_addclose(&actions, inPipe[1])
         posix_spawn_file_actions_addclose(&actions, outPipe[0])
         posix_spawn_file_actions_addclose(&actions, errPipe[0])
 
@@ -84,12 +95,13 @@ final class PosixSpawnedProcess: ProcessHandle, @unchecked Sendable {
 
         var childPid: pid_t = 0
         let rc = posix_spawn(&childPid, shellPath, &actions, &attr, cArgs, cEnv)
-        close(outPipe[1]); close(errPipe[1])
+        close(outPipe[1]); close(errPipe[1]); close(inPipe[0])
         guard rc == 0 else {
-            close(outPipe[0]); close(errPipe[0])
+            close(outPipe[0]); close(errPipe[0]); close(inPipe[1])
             throw ShellSpawnError.spawnFailed(rc)
         }
         self.pid = childPid
+        self.stdinWriteFD = inPipe[1]
 
         let oFD = outPipe[0], eFD = errPipe[0]
         self.logs = AsyncStream { cont in
@@ -119,6 +131,7 @@ final class PosixSpawnedProcess: ProcessHandle, @unchecked Sendable {
     }
 
     func terminate(graceSeconds: Double) async {
+        close(stdinWriteFD)
         kill(-pid, SIGTERM)
         try? await Task.sleep(nanoseconds: UInt64(graceSeconds * 1_000_000_000))
         if kill(-pid, 0) == 0 { kill(-pid, SIGKILL) }

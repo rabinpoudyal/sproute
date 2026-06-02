@@ -15,15 +15,18 @@ struct LogConsoleView: View {
                     Label("Pause scroll", systemImage: buffer.paused ? "pause.fill" : "pause")
                 }
                 .toggleStyle(.button)
+                .help(buffer.paused ? "Resume autoscroll" : "Pause autoscroll")
                 Button {
                     buffer.clear()
                 } label: {
                     Label("Clear", systemImage: "trash")
                 }
+                .help("Clear logs")
                 if let onPopOut {
                     Button(action: onPopOut) {
                         Label("Pop Out", systemImage: "rectangle.portrait.and.arrow.right")
                     }
+                    .help("Open logs in a separate window")
                 }
             }
             .labelStyle(.iconOnly)
@@ -33,14 +36,17 @@ struct LogConsoleView: View {
         }
     }
 
+    private func attributed(_ entry: LogBuffer.Entry) -> AttributedString {
+        ANSIText.parse(entry.text, fallback: entry.source == .stderr ? .red : .primary)
+    }
+
     private var logScroll: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     ForEach(buffer.entries) { entry in
-                        Text(entry.text)
+                        Text(attributed(entry))
                             .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(entry.source == .stderr ? Color.red : Color.primary)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .id(entry.id)

@@ -138,6 +138,7 @@ struct ConfigFormView<Extra: View>: View {
                             Image(systemName: "minus.circle")
                         }
                         .buttonStyle(.borderless)
+                        .help("Remove step")
                     }
                 }
                 Button {
@@ -159,6 +160,7 @@ struct ConfigFormView<Extra: View>: View {
                             Image(systemName: "minus.circle")
                         }
                         .buttonStyle(.borderless)
+                        .help("Remove process")
                     }
                 }
                 Button {
@@ -299,12 +301,13 @@ private struct SymlinkSourceRow: View {
                         Image(systemName: expanded ? "eye.slash" : "eye")
                     }
                     .buttonStyle(.borderless)
-                    .help("Show contents")
+                    .help(expanded ? "Hide contents" : "Show contents")
                 }
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "minus.circle")
                 }
                 .buttonStyle(.borderless)
+                .help("Remove source")
             }
             if expanded { preview }
         }
