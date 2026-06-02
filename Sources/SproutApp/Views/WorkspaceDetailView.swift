@@ -12,30 +12,41 @@ struct WorkspaceDetailView: View {
     @State private var confirmDone = false
     @State private var confirmDiscard = false
     @State private var dirtyWarning = false
-    @State private var selectedProcess: String?
+    @State private var selection: DetailSelection?
+
+    /// What the main pane is showing: a process's logs, or a live console session.
+    enum DetailSelection: Hashable {
+        case process(String)
+        case console(UUID)
+    }
 
     private var rec: WorkspaceRecord { item.record }
     private var processNames: [String] { project.config.run.processes.map(\.name) }
-    private var current: String? { selectedProcess ?? processNames.first }
+    private var consoles: [ConsoleSessionItem] {
+        project.consoleSessions.filter { $0.branch == rec.branch }
+    }
+    private var consoleConfigNames: [String] { project.config.run.consoles.map(\.name) }
+
+    /// Default to the first process, else the first console, else nil.
+    private var current: DetailSelection? {
+        if let selection { return selection }
+        if let first = processNames.first { return .process(first) }
+        if let firstConsole = consoles.first { return .console(firstConsole.id) }
+        return nil
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
             if let current {
-                processBar(current)
+                selectorBar(current)
                 Divider()
-                LogConsoleView(
-                    buffer: project.logBuffer(branch: rec.branch, process: current),
-                    onPopOut: {
-                        openWindow(
-                            value: LogTarget(
-                                projectID: project.id, branch: rec.branch, process: current))
-                    })
+                content(current)
             } else {
                 ContentUnavailableView(
-                    "No processes", systemImage: "bolt.slash",
-                    description: Text("This workspace defines no run processes."))
+                    "Nothing to show", systemImage: "bolt.slash",
+                    description: Text("This workspace defines no run processes or consoles."))
             }
         }
         .navigationTitle(rec.branch)
@@ -93,45 +104,111 @@ struct WorkspaceDetailView: View {
         .padding()
     }
 
-    private func processBar(_ name: String) -> some View {
+    private func selectorBar(_ current: DetailSelection) -> some View {
         HStack(spacing: 12) {
             Picker(
-                "Process",
+                "View",
                 selection: Binding(
-                    get: { current ?? name },
-                    set: { selectedProcess = $0 })
+                    get: { current },
+                    set: { selection = $0 })
             ) {
                 ForEach(processNames, id: \.self) { proc in
                     Label {
                         Text(proc)
                     } icon: {
-                        Image(systemName: "circle.fill")
-                            .foregroundStyle(dotColor(proc))
+                        Image(systemName: "circle.fill").foregroundStyle(dotColor(proc))
                     }
-                    .tag(proc)
+                    .tag(DetailSelection.process(proc))
+                }
+                ForEach(consoles) { session in
+                    Label {
+                        Text(session.name)
+                    } icon: {
+                        Image(systemName: "terminal")
+                    }
+                    .tag(DetailSelection.console(session.id))
                 }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+
             Spacer()
-            Button {
-                run { await project.startProcess(item, name: name) }
-            } label: {
-                Label("Start", systemImage: "play.fill")
+
+            if !consoleConfigNames.isEmpty {
+                Menu {
+                    ForEach(consoleConfigNames, id: \.self) { name in
+                        Button(name) {
+                            run {
+                                await project.startConsole(item, name: name)
+                                if let new = project.consoleSessions
+                                    .last(where: { $0.branch == rec.branch && $0.name == name })
+                                {
+                                    selection = .console(new.id)
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Console", systemImage: "terminal")
+                }
+                .help("Start an interactive console")
             }
-            Button {
-                run { await project.stopProcess(item, name: name) }
-            } label: {
-                Label("Stop", systemImage: "stop.fill")
-            }
-            Button {
-                run { await project.restartProcess(item, name: name) }
-            } label: {
-                Label("Restart", systemImage: "arrow.clockwise")
+
+            // Per-selection controls.
+            switch current {
+            case .process(let name):
+                Button {
+                    run { await project.startProcess(item, name: name) }
+                } label: {
+                    Label("Start", systemImage: "play.fill")
+                }
+                Button {
+                    run { await project.stopProcess(item, name: name) }
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                }
+                Button {
+                    run { await project.restartProcess(item, name: name) }
+                } label: {
+                    Label("Restart", systemImage: "arrow.clockwise")
+                }
+            case .console(let id):
+                Button {
+                    run { await project.stopConsole(id: id) }
+                    selection = nil
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                }
+                Button {
+                    openWindow(value: ConsoleTarget(projectID: project.id, sessionID: id))
+                } label: {
+                    Label("Pop Out", systemImage: "rectangle.portrait.and.arrow.right")
+                }
             }
         }
         .labelStyle(.titleAndIcon)
         .padding(.horizontal).padding(.vertical, 6)
+    }
+
+    @ViewBuilder
+    private func content(_ current: DetailSelection) -> some View {
+        switch current {
+        case .process(let name):
+            LogConsoleView(
+                buffer: project.logBuffer(branch: rec.branch, process: name),
+                onPopOut: {
+                    openWindow(
+                        value: LogTarget(
+                            projectID: project.id, branch: rec.branch, process: name))
+                })
+        case .console(let id):
+            if let controller = project.consoleController(id: id) {
+                ConsoleView(controller: controller)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ContentUnavailableView("Console ended", systemImage: "terminal")
+            }
+        }
     }
 
     private func dotColor(_ name: String) -> Color {
