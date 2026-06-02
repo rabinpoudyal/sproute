@@ -69,6 +69,19 @@ public enum TOMLConfigLoader {
             }
         }
 
+        var consoles: [ConsoleConfig] = []
+        if let arr = runT?["console"]?.array {
+            for entry in arr {
+                guard let ct = entry.table,
+                    let name = ct["name"]?.string,
+                    let cmd = ct["command"]?.string
+                else {
+                    throw ConfigError.missingKey("run.console[].name/command")
+                }
+                consoles.append(ConsoleConfig(name: name, command: cmd))
+            }
+        }
+
         let hooksT = table["hooks"]?.table
         let hooks = HooksConfig(
             preTeardown: hooksT?["pre_teardown"]?.string,
@@ -90,7 +103,7 @@ public enum TOMLConfigLoader {
                 dropCommand: try str(dbT, "drop_command", "database.drop_command"),
                 urlTemplate: try str(dbT, "url_template", "database.url_template")),
             setup: steps,
-            run: RunConfig(processes: processes),
+            run: RunConfig(processes: processes, consoles: consoles),
             hooks: hooks)
     }
 }

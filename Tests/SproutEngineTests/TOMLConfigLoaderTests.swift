@@ -89,6 +89,60 @@ private let sampleTOML = """
     #expect(reparsed.run.processes == config.run.processes)
 }
 
+@Test func parsesConsoleEntries() throws {
+    let toml = """
+        [project]
+        name = "shop"
+        [worktree]
+        base_dir = "../wt"
+        branch_prefix = "feature/"
+        [port]
+        lower = 4000
+        upper = 4050
+        [env]
+        symlink_sources = []
+        local_file = ".env.local"
+        [database]
+        create_command = "createdb {{db_name}}"
+        drop_command = "dropdb {{db_name}}"
+        url_template = "postgres://localhost/{{db_name}}"
+        [[run.console]]
+        name = "rails"
+        command = "rbenv exec ruby bin/rails console"
+        [[run.console]]
+        name = "db"
+        command = "rbenv exec ruby bin/rails dbconsole"
+        """
+    let config = try TOMLConfigLoader.parse(toml)
+    let expected: [ConsoleConfig] = [
+        ConsoleConfig(name: "rails", command: "rbenv exec ruby bin/rails console"),
+        ConsoleConfig(name: "db", command: "rbenv exec ruby bin/rails dbconsole"),
+    ]
+    #expect(config.run.consoles == expected)
+}
+
+@Test func parsesEmptyConsoleListWhenAbsent() throws {
+    let toml = """
+        [project]
+        name = "shop"
+        [worktree]
+        base_dir = "../wt"
+        branch_prefix = "feature/"
+        [port]
+        lower = 4000
+        upper = 4050
+        [env]
+        symlink_sources = []
+        local_file = ".env.local"
+        [database]
+        create_command = "createdb {{db_name}}"
+        drop_command = "dropdb {{db_name}}"
+        url_template = "postgres://localhost/{{db_name}}"
+        """
+    let config = try TOMLConfigLoader.parse(toml)
+    #expect(config.run.consoles.isEmpty)
+}
+
 @Test func missingRequiredKeyThrows() {
     let bad = """
         [project]
