@@ -73,9 +73,19 @@ public struct ProcessConfig: Sendable, Equatable {
     public init(name: String, command: String) { self.name = name; self.command = command }
 }
 
+public struct ConsoleConfig: Sendable, Equatable {
+    public var name: String
+    public var command: String  // template, interactive REPL run under a PTY
+    public init(name: String, command: String) { self.name = name; self.command = command }
+}
+
 public struct RunConfig: Sendable {
     public var processes: [ProcessConfig]
-    public init(processes: [ProcessConfig]) { self.processes = processes }
+    public var consoles: [ConsoleConfig]
+    public init(processes: [ProcessConfig], consoles: [ConsoleConfig] = []) {
+        self.processes = processes
+        self.consoles = consoles
+    }
 }
 
 public struct HooksConfig: Sendable {
