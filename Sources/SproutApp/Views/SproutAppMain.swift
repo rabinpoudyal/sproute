@@ -52,6 +52,13 @@ struct SproutAppMain: App {
                 .frame(minWidth: 520, minHeight: 320)
         }
 
+        // Detached, per-session console windows.
+        WindowGroup(for: ConsoleTarget.self) { $target in
+            DetachedConsoleWindow(target: target)
+                .environmentObject(app)
+                .frame(minWidth: 560, minHeight: 360)
+        }
+
         Settings {
             SettingsView()
                 .environmentObject(app)
