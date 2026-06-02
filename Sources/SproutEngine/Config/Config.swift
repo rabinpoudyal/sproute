@@ -70,7 +70,10 @@ public struct SetupStep: Sendable, Equatable {
 public struct ProcessConfig: Sendable, Equatable {
     public var name: String
     public var command: String  // template, long-running
-    public init(name: String, command: String) { self.name = name; self.command = command }
+    public var bindsPort: Bool  // process binds a listen port; gets its own port
+    public init(name: String, command: String, bindsPort: Bool = false) {
+        self.name = name; self.command = command; self.bindsPort = bindsPort
+    }
 }
 
 public struct ConsoleConfig: Sendable, Equatable {

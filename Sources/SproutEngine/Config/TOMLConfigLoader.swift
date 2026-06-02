@@ -65,7 +65,10 @@ public enum TOMLConfigLoader {
                 else {
                     throw ConfigError.missingKey("run.process[].name/command")
                 }
-                processes.append(ProcessConfig(name: name, command: cmd))
+                processes.append(
+                    ProcessConfig(
+                        name: name, command: cmd,
+                        bindsPort: pt["port"]?.bool ?? false))
             }
         }
 

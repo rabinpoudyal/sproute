@@ -150,3 +150,33 @@ private let sampleTOML = """
         """
     #expect(throws: ConfigError.self) { _ = try TOMLConfigLoader.parse(bad) }
 }
+
+@Test func parsesProcessPortFlag() throws {
+    let toml = """
+        [project]
+        name = "shop"
+        [worktree]
+        base_dir = "/wt"
+        branch_prefix = "feature/"
+        [port]
+        lower = 4000
+        upper = 4010
+        [env]
+        symlink_sources = []
+        local_file = ".env.local"
+        [database]
+        create_command = "createdb {{db_name}}"
+        drop_command = "dropdb {{db_name}}"
+        url_template = "postgres://localhost/{{db_name}}"
+        [[run.process]]
+        name = "web"
+        command = "bin/rails server -p {{port}}"
+        port = true
+        [[run.process]]
+        name = "worker"
+        command = "bin/jobs"
+        """
+    let config = try TOMLConfigLoader.parse(toml)
+    #expect(config.run.processes[0].bindsPort == true)
+    #expect(config.run.processes[1].bindsPort == false)
+}
