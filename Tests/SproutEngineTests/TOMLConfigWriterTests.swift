@@ -34,4 +34,29 @@ import Foundation
         let toml = TOMLConfigWriter.serialize(Fixtures.config())
         #expect(!toml.contains("[hooks]"))
     }
+
+    @Test func roundTripsConsoles() throws {
+        let original = Config(
+            project: ProjectConfig(name: "shop"),
+            worktree: WorktreeConfig(baseDir: "../wt", branchPrefix: "feature/"),
+            port: PortConfig(lower: 4000, upper: 4050),
+            env: EnvConfig(symlinkSources: [], localFile: ".env.local"),
+            database: DatabaseConfig(
+                createCommand: "createdb {{db_name}}",
+                dropCommand: "dropdb {{db_name}}",
+                urlTemplate: "postgres://localhost/{{db_name}}"),
+            setup: [],
+            run: RunConfig(
+                processes: [ProcessConfig(name: "web", command: "npm run dev")],
+                consoles: [
+                    ConsoleConfig(name: "rails", command: "rbenv exec ruby bin/rails console"),
+                    ConsoleConfig(name: "db", command: "rbenv exec ruby bin/rails dbconsole"),
+                ]),
+            hooks: HooksConfig())
+        let reparsed = try TOMLConfigLoader.parse(TOMLConfigWriter.serialize(original))
+        let expectedConsoles = original.run.consoles
+        let expectedProcesses = original.run.processes
+        #expect(reparsed.run.consoles == expectedConsoles)
+        #expect(reparsed.run.processes == expectedProcesses)
+    }
 }

@@ -43,6 +43,11 @@ public enum TOMLConfigWriter {
             procs.append(TOMLTable(["name": p.name, "command": p.command]))
         }
         run["process"] = procs
+        let consoles = TOMLArray()
+        for c in config.run.consoles {
+            consoles.append(TOMLTable(["name": c.name, "command": c.command]))
+        }
+        run["console"] = consoles
         root["run"] = run
 
         if config.hooks.preTeardown != nil || config.hooks.postTeardown != nil {
