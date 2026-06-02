@@ -8,6 +8,14 @@ struct WorkspaceItem: Identifiable, Equatable {
     var id: UUID { record.id }
 }
 
+/// One running interactive console, for display in the detail view and process list.
+struct ConsoleSessionItem: Identifiable, Equatable {
+    let id: UUID
+    let branch: String
+    let name: String
+    var status: ConsoleStatus
+}
+
 /// Identifies one supervised process within a workspace branch.
 private struct ProcessKey: Hashable {
     let branch: String
@@ -25,6 +33,7 @@ final class ProjectStore: ObservableObject, Identifiable {
     @Published private(set) var workspaces: [WorkspaceItem] = []
     @Published private(set) var doctor: [ToolCheck] = []
     @Published var lastError: AppError?
+    @Published private(set) var consoleSessions: [ConsoleSessionItem] = []
 
     private let shell = LoginShellRunner()
     private let renderer = TemplateRenderer()
@@ -33,6 +42,9 @@ final class ProjectStore: ObservableObject, Identifiable {
 
     private var buffers: [ProcessKey: LogBuffer] = [:]
     private var supervisors: [ProcessKey: ServerSupervisor] = [:]
+    private lazy var consoleSupervisor = ConsoleSupervisor(
+        spawner: ForkPTYSpawner(), renderer: renderer)
+    private var consoleControllers: [UUID: ConsoleSessionController] = [:]
 
     var name: String { config.project.name }
 
@@ -223,6 +235,68 @@ final class ProjectStore: ObservableObject, Identifiable {
         }
     }
 
+    // MARK: - Consoles
+
+    /// The configured console command for a name, or nil if unknown.
+    private func consoleCommand(for name: String) -> String? {
+        config.run.consoles.first(where: { $0.name == name })?.command
+    }
+
+    /// The SwiftTerm-backed view controller for a running console, if any.
+    func consoleController(id: UUID) -> ConsoleSessionController? {
+        consoleControllers[id]
+    }
+
+    /// Start a new console session for `name` on the workspace's branch.
+    func startConsole(_ item: WorkspaceItem, name: String) async {
+        guard let command = consoleCommand(for: name) else { return }
+        let rec = item.record
+        let branch = rec.branch
+        let onExit: @Sendable (UUID, Int32) -> Void = { [weak self] id, _ in
+            Task { @MainActor in self?.handleConsoleExit(id: id) }
+        }
+        do {
+            let session = try await consoleSupervisor.start(
+                branch: branch, name: name, command: command,
+                ctx: context(rec), cwd: URL(fileURLWithPath: rec.worktreePath),
+                env: childEnv(rec), onExit: onExit)
+            consoleControllers[session.id] = ConsoleSessionController(
+                id: session.id, handle: session.handle)
+            await refreshConsoles(branch: branch)
+        } catch {
+            lastError = AppError(error)
+        }
+    }
+
+    func stopConsole(id: UUID) async {
+        let branch = consoleSessions.first(where: { $0.id == id })?.branch
+        consoleControllers[id]?.stop()
+        consoleControllers[id] = nil
+        await consoleSupervisor.stop(id: id)
+        if let branch { await refreshConsoles(branch: branch) }
+    }
+
+    /// A console exited on its own (user typed `exit`, or it crashed). Drop its controller
+    /// and refresh the list so the UI removes it.
+    private func handleConsoleExit(id: UUID) {
+        let branch = consoleSessions.first(where: { $0.id == id })?.branch
+        consoleControllers[id]?.stop()
+        consoleControllers[id] = nil
+        Task { if let branch { await refreshConsoles(branch: branch) } }
+    }
+
+    /// Rebuild `consoleSessions` for one branch from the supervisor's truth, preserving
+    /// sessions on other branches.
+    private func refreshConsoles(branch: String) async {
+        let infos = await consoleSupervisor.list(branch: branch)
+        var others = consoleSessions.filter { $0.branch != branch }
+        others.append(
+            contentsOf: infos.map {
+                ConsoleSessionItem(id: $0.id, branch: $0.branch, name: $0.name, status: $0.status)
+            })
+        consoleSessions = others
+    }
+
     /// Replace (or insert) a process state by name and recompute the record's status.
     private func upsertProcess(_ rec: inout WorkspaceRecord, _ state: ProcessState) {
         if let i = rec.processes.firstIndex(where: { $0.name == state.name }) {
@@ -246,6 +320,15 @@ final class ProjectStore: ObservableObject, Identifiable {
 
     func teardown(_ item: WorkspaceItem, push: Bool, force: Bool) async {
         do {
+            await consoleSupervisor.killAll(branch: item.record.branch)
+            for (id, c) in consoleControllers
+            where consoleSessions.contains(where: {
+                $0.id == id && $0.branch == item.record.branch
+            }) {
+                c.stop()
+                consoleControllers[id] = nil
+            }
+            consoleSessions = consoleSessions.filter { $0.branch != item.record.branch }
             try await manager.teardown(
                 id: item.record.id, config: config,
                 repo: rootURL, push: push, force: force)
