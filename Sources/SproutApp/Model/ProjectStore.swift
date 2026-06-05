@@ -118,14 +118,18 @@ final class ProjectStore: ObservableObject, Identifiable {
         let own = name.flatMap { plan[$0] } ?? rec.port
         return TemplateContext(
             project: config.project.name, branch: rec.branch,
-            port: own, dbName: rec.dbName, worktree: rec.worktreePath, ports: plan)
+            port: own, dbName: rec.dbName, worktree: rec.worktreePath, ports: plan,
+            host: rec.bindIP)
     }
 
     private func childEnv(_ rec: WorkspaceRecord, process name: String? = nil) -> [String: String] {
         let ctx = context(rec, process: name)
         let url = DatabaseService(shell: shell, renderer: renderer)
             .databaseURL(config.database, ctx: ctx)
-        return ["PORT": String(ctx.port), "DATABASE_URL": url]
+        return [
+            "PORT": String(ctx.port), "DATABASE_URL": url,
+            "HOST": rec.bindIP, "BIND_IP": rec.bindIP,
+        ]
     }
 
     // MARK: - Lifecycle actions
