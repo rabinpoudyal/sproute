@@ -32,3 +32,12 @@ import Foundation
     #expect(r.render("{{worktree}}/.env", ctx) == "/wt/shop-login/.env")
     #expect(r.render("branch={{branch}}", ctx) == "branch=feature/Add-Login")
 }
+
+@Test func renderResolvesOwnAndSiblingPorts() {
+    let ctx = TemplateContext(
+        project: "shop", branch: "main", port: 4000,
+        dbName: "shop", worktree: "/wt", ports: ["web": 4000, "vite": 4001])
+    let r = TemplateRenderer()
+    #expect(r.render("-p {{port}}", ctx) == "-p 4000")
+    #expect(r.render("VITE={{port.vite}} WEB={{port.web}}", ctx) == "VITE=4001 WEB=4000")
+}

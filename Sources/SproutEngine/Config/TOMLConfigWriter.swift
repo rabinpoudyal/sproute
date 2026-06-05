@@ -15,11 +15,6 @@ public enum TOMLConfigWriter {
             "branch_prefix": config.worktree.branchPrefix,
         ])
 
-        root["port"] = TOMLTable([
-            "lower": config.port.lower,
-            "upper": config.port.upper,
-        ])
-
         let env = TOMLTable()
         env["symlink_sources"] = TOMLArray(config.env.symlinkSources)
         env["local_file"] = config.env.localFile
@@ -42,7 +37,7 @@ public enum TOMLConfigWriter {
         for p in config.run.processes {
             let t = TOMLTable(
                 ["name": p.name, "command": p.command] as [String: TOMLValueConvertible])
-            if p.bindsPort { t["port"] = true }
+            if let port = p.port { t["port"] = port }
             procs.append(t)
         }
         run["process"] = procs

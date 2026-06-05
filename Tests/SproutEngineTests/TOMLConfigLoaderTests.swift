@@ -10,10 +10,6 @@ private let sampleTOML = """
     base_dir = "/wt"
     branch_prefix = "feature/"
 
-    [port]
-    lower = 4000
-    upper = 4010
-
     [env]
     symlink_sources = [".env"]
     local_file = ".env.local"
@@ -39,8 +35,6 @@ private let sampleTOML = """
     let config = try TOMLConfigLoader.parse(sampleTOML)
     #expect(config.project.name == "shop")
     #expect(config.worktree.baseDir == "/wt")
-    #expect(config.port.lower == 4000)
-    #expect(config.port.upper == 4010)
     #expect(config.env.symlinkSources == [".env"])
     #expect(config.env.localFile == ".env.local")
     #expect(config.database.createCommand == "createdb {{db_name}}")
@@ -62,9 +56,6 @@ private let sampleTOML = """
         [worktree]
         base_dir = "/wt"
         branch_prefix = "feature/"
-        [port]
-        lower = 4000
-        upper = 4010
         [env]
         symlink_sources = []
         local_file = ".env.local"
@@ -96,9 +87,6 @@ private let sampleTOML = """
         [worktree]
         base_dir = "../wt"
         branch_prefix = "feature/"
-        [port]
-        lower = 4000
-        upper = 4050
         [env]
         symlink_sources = []
         local_file = ".env.local"
@@ -128,9 +116,6 @@ private let sampleTOML = """
         [worktree]
         base_dir = "../wt"
         branch_prefix = "feature/"
-        [port]
-        lower = 4000
-        upper = 4050
         [env]
         symlink_sources = []
         local_file = ".env.local"
@@ -143,11 +128,10 @@ private let sampleTOML = """
     #expect(config.run.consoles.isEmpty)
 }
 
-@Test func roundTripsProcessPortFlag() throws {
+@Test func roundTripsProcessPort() throws {
     let config = Config(
         project: ProjectConfig(name: "shop"),
         worktree: WorktreeConfig(baseDir: "/wt", branchPrefix: "feature/"),
-        port: PortConfig(lower: 4000, upper: 4010),
         env: EnvConfig(symlinkSources: [], localFile: ".env.local"),
         database: DatabaseConfig(
             createCommand: "createdb {{db_name}}",
@@ -155,8 +139,8 @@ private let sampleTOML = """
             urlTemplate: "postgres://localhost/{{db_name}}"),
         setup: [],
         run: RunConfig(processes: [
-            ProcessConfig(name: "web", command: "bin/rails server", bindsPort: true),
-            ProcessConfig(name: "worker", command: "bin/jobs", bindsPort: false),
+            ProcessConfig(name: "web", command: "bin/rails server", port: 4000),
+            ProcessConfig(name: "worker", command: "bin/jobs"),
         ]),
         hooks: HooksConfig())
     let reparsed = try TOMLConfigLoader.parse(TOMLConfigWriter.serialize(config))
@@ -171,16 +155,13 @@ private let sampleTOML = """
     #expect(throws: ConfigError.self) { _ = try TOMLConfigLoader.parse(bad) }
 }
 
-@Test func parsesProcessPortFlag() throws {
+@Test func parsesProcessPort() throws {
     let toml = """
         [project]
         name = "shop"
         [worktree]
         base_dir = "/wt"
         branch_prefix = "feature/"
-        [port]
-        lower = 4000
-        upper = 4010
         [env]
         symlink_sources = []
         local_file = ".env.local"
@@ -191,12 +172,38 @@ private let sampleTOML = """
         [[run.process]]
         name = "web"
         command = "bin/rails server -p {{port}}"
-        port = true
+        port = 4000
         [[run.process]]
         name = "worker"
         command = "bin/jobs"
         """
     let config = try TOMLConfigLoader.parse(toml)
-    #expect(config.run.processes[0].bindsPort == true)
-    #expect(config.run.processes[1].bindsPort == false)
+    #expect(config.run.processes[0].port == 4000)
+    #expect(config.run.processes[1].port == nil)
+}
+
+@Test func rejectsDuplicateProcessPorts() {
+    let toml = """
+        [project]
+        name = "shop"
+        [worktree]
+        base_dir = "/wt"
+        branch_prefix = "feature/"
+        [env]
+        symlink_sources = []
+        local_file = ".env.local"
+        [database]
+        create_command = "createdb {{db_name}}"
+        drop_command = "dropdb {{db_name}}"
+        url_template = "postgres://localhost/{{db_name}}"
+        [[run.process]]
+        name = "web"
+        command = "a"
+        port = 4000
+        [[run.process]]
+        name = "api"
+        command = "b"
+        port = 4000
+        """
+    #expect(throws: ConfigError.duplicatePort(4000)) { _ = try TOMLConfigLoader.parse(toml) }
 }

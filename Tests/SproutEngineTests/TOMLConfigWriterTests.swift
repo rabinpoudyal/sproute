@@ -11,8 +11,6 @@ import Foundation
         #expect(parsed.project.name == original.project.name)
         #expect(parsed.worktree.baseDir == original.worktree.baseDir)
         #expect(parsed.worktree.branchPrefix == original.worktree.branchPrefix)
-        #expect(parsed.port.lower == original.port.lower)
-        #expect(parsed.port.upper == original.port.upper)
         #expect(parsed.env.symlinkSources == original.env.symlinkSources)
         #expect(parsed.env.localFile == original.env.localFile)
         #expect(parsed.database.createCommand == original.database.createCommand)
@@ -39,7 +37,6 @@ import Foundation
         let original = Config(
             project: ProjectConfig(name: "shop"),
             worktree: WorktreeConfig(baseDir: "../wt", branchPrefix: "feature/"),
-            port: PortConfig(lower: 4000, upper: 4050),
             env: EnvConfig(symlinkSources: [], localFile: ".env.local"),
             database: DatabaseConfig(
                 createCommand: "createdb {{db_name}}",

@@ -3,7 +3,6 @@ import Foundation
 public struct Config: Sendable {
     public var project: ProjectConfig
     public var worktree: WorktreeConfig
-    public var port: PortConfig
     public var env: EnvConfig
     public var database: DatabaseConfig
     public var setup: [SetupStep]
@@ -11,11 +10,11 @@ public struct Config: Sendable {
     public var hooks: HooksConfig
 
     public init(
-        project: ProjectConfig, worktree: WorktreeConfig, port: PortConfig,
+        project: ProjectConfig, worktree: WorktreeConfig,
         env: EnvConfig, database: DatabaseConfig, setup: [SetupStep],
         run: RunConfig, hooks: HooksConfig
     ) {
-        self.project = project; self.worktree = worktree; self.port = port
+        self.project = project; self.worktree = worktree
         self.env = env; self.database = database; self.setup = setup
         self.run = run; self.hooks = hooks
     }
@@ -33,12 +32,6 @@ public struct WorktreeConfig: Sendable {
     public init(baseDir: String, branchPrefix: String) {
         self.baseDir = baseDir; self.branchPrefix = branchPrefix
     }
-}
-
-public struct PortConfig: Sendable {
-    public var lower: Int
-    public var upper: Int
-    public init(lower: Int, upper: Int) { self.lower = lower; self.upper = upper }
 }
 
 public struct EnvConfig: Sendable {
@@ -70,9 +63,9 @@ public struct SetupStep: Sendable, Equatable {
 public struct ProcessConfig: Sendable, Equatable {
     public var name: String
     public var command: String  // template, long-running
-    public var bindsPort: Bool  // process binds a listen port; gets its own port
-    public init(name: String, command: String, bindsPort: Bool = false) {
-        self.name = name; self.command = command; self.bindsPort = bindsPort
+    public var port: Int?  // fixed listen port; nil = process binds no port
+    public init(name: String, command: String, port: Int? = nil) {
+        self.name = name; self.command = command; self.port = port
     }
 }
 

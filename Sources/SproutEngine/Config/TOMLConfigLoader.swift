@@ -4,6 +4,7 @@ import TOMLKit
 public enum ConfigError: Error, Equatable {
     case missingKey(String)
     case parseFailed(String)
+    case duplicatePort(Int)
 }
 
 public enum TOMLConfigLoader {
@@ -29,14 +30,9 @@ public enum TOMLConfigLoader {
             guard let v = t[key]?.string else { throw ConfigError.missingKey(path) }
             return v
         }
-        func int(_ t: TOMLTable, _ key: String, _ path: String) throws -> Int {
-            guard let v = t[key]?.int else { throw ConfigError.missingKey(path) }
-            return v
-        }
 
         let projectT = try tbl("project")
         let worktreeT = try tbl("worktree")
-        let portT = try tbl("port")
         let envT = try tbl("env")
         let dbT = try tbl("database")
         let runT = table["run"]?.table
@@ -57,6 +53,7 @@ public enum TOMLConfigLoader {
         }
 
         var processes: [ProcessConfig] = []
+        var seenPorts: Set<Int> = []
         if let arr = runT?["process"]?.array {
             for entry in arr {
                 guard let pt = entry.table,
@@ -65,10 +62,13 @@ public enum TOMLConfigLoader {
                 else {
                     throw ConfigError.missingKey("run.process[].name/command")
                 }
-                processes.append(
-                    ProcessConfig(
-                        name: name, command: cmd,
-                        bindsPort: pt["port"]?.bool ?? false))
+                let port = pt["port"]?.int
+                if let port {
+                    guard seenPorts.insert(port).inserted else {
+                        throw ConfigError.duplicatePort(port)
+                    }
+                }
+                processes.append(ProcessConfig(name: name, command: cmd, port: port))
             }
         }
 
@@ -95,9 +95,6 @@ public enum TOMLConfigLoader {
             worktree: WorktreeConfig(
                 baseDir: try str(worktreeT, "base_dir", "worktree.base_dir"),
                 branchPrefix: try str(worktreeT, "branch_prefix", "worktree.branch_prefix")),
-            port: PortConfig(
-                lower: try int(portT, "lower", "port.lower"),
-                upper: try int(portT, "upper", "port.upper")),
             env: EnvConfig(
                 symlinkSources: sources,
                 localFile: try str(envT, "local_file", "env.local_file")),

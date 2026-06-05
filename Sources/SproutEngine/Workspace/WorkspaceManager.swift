@@ -31,7 +31,6 @@ public struct PosixProcessTerminator: ProcessTerminator {
 
 public struct WorkspaceManager: Sendable {
     let git: GitService
-    let portAllocator: PortAllocator
     let database: DatabaseService
     let envLinker: EnvLinker
     let fs: FileSystem
@@ -43,24 +42,24 @@ public struct WorkspaceManager: Sendable {
     let shell: ShellRunner
 
     public init(
-        git: GitService, portAllocator: PortAllocator, database: DatabaseService,
+        git: GitService, database: DatabaseService,
         envLinker: EnvLinker, fs: FileSystem, setupRunner: SetupRunner,
         store: StateStore, checker: ProcessChecker, terminator: ProcessTerminator,
         renderer: TemplateRenderer, shell: ShellRunner
     ) {
-        self.git = git; self.portAllocator = portAllocator; self.database = database
+        self.git = git; self.database = database
         self.envLinker = envLinker; self.fs = fs; self.setupRunner = setupRunner
         self.store = store; self.checker = checker; self.terminator = terminator
         self.renderer = renderer; self.shell = shell
     }
 
     private func context(
-        config: Config, branch: String, port: Int,
+        config: Config, branch: String, port: Int, ports: [String: Int],
         dbName: String, worktree: String
     ) -> TemplateContext {
         TemplateContext(
             project: config.project.name, branch: branch,
-            port: port, dbName: dbName, worktree: worktree)
+            port: port, dbName: dbName, worktree: worktree, ports: ports)
     }
 
     /// `log` routes output per stream so each process (and setup) can be shown in its
@@ -101,9 +100,10 @@ public struct WorkspaceManager: Sendable {
             try await git.worktreeAdd(repo: repo, path: worktreePath, base: base, branch: branch)
             didWorktree = true
 
-            let port = try portAllocator.allocate()
+            let plan = portPlan(config.run.processes)
+            let port = primaryPort(config.run.processes)
             let ctx = context(
-                config: config, branch: branch, port: port,
+                config: config, branch: branch, port: port, ports: plan,
                 dbName: dbName, worktree: worktreePath)
 
             try await database.create(config.database, ctx: ctx, cwd: repo)
@@ -129,11 +129,16 @@ public struct WorkspaceManager: Sendable {
                 env: childEnv, onLog: { log("setup", $0) })
 
             for proc in config.run.processes {
+                let ownPort = proc.port ?? port
+                let pctx = context(
+                    config: config, branch: branch, port: ownPort, ports: plan,
+                    dbName: dbName, worktree: worktreePath)
+                let penv = ["PORT": String(ownPort), "DATABASE_URL": dbURL]
                 let supervisor = ServerSupervisor(shell: shell, renderer: renderer)
                 let name = proc.name
                 let pid = try await supervisor.start(
-                    command: proc.command, ctx: ctx,
-                    cwd: worktreeURL, env: childEnv, onLog: { log(name, $0) },
+                    command: proc.command, ctx: pctx,
+                    cwd: worktreeURL, env: penv, onLog: { log(name, $0) },
                     onExit: { pid, code in onProcessExit(name, pid, code) })
                 startedProcesses.append(ProcessState(name: proc.name, pid: pid, status: .running))
             }
@@ -165,7 +170,7 @@ public struct WorkspaceManager: Sendable {
         }
         if didDB {
             let ctx = context(
-                config: config, branch: branch, port: 0,
+                config: config, branch: branch, port: 0, ports: [:],
                 dbName: dbName, worktree: worktreePath)
             try? await database.drop(config.database, ctx: ctx, cwd: repo)
         }
@@ -195,6 +200,7 @@ public struct WorkspaceManager: Sendable {
         let worktreeURL = URL(fileURLWithPath: record.worktreePath)
         let ctx = context(
             config: config, branch: record.branch, port: record.port,
+            ports: portPlan(config.run.processes),
             dbName: record.dbName, worktree: record.worktreePath)
 
         // pre-hook

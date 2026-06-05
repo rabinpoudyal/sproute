@@ -7,7 +7,6 @@ enum Fixtures {
         Config(
             project: ProjectConfig(name: "shop"),
             worktree: WorktreeConfig(baseDir: "/wt", branchPrefix: "feature/"),
-            port: PortConfig(lower: 4000, upper: 4010),
             env: EnvConfig(symlinkSources: [".env"], localFile: ".env.local"),
             database: DatabaseConfig(
                 createCommand: "createdb {{db_name}}",
@@ -18,7 +17,9 @@ enum Fixtures {
                 SetupStep(name: "deps", command: "npm ci"),
                 SetupStep(name: "migrate", command: "npm run migrate"),
             ],
-            run: RunConfig(processes: [ProcessConfig(name: "server", command: "npm run dev")]),
+            run: RunConfig(processes: [
+                ProcessConfig(name: "server", command: "npm run dev", port: 4000)
+            ]),
             hooks: HooksConfig()
         )
     }
@@ -28,5 +29,5 @@ enum Fixtures {
     let c = Fixtures.config()
     #expect(c.project.name == "shop")
     #expect(c.setup.count == 2)
-    #expect(c.port.lower == 4000)
+    #expect(c.run.processes.first?.port == 4000)
 }

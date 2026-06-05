@@ -12,7 +12,6 @@ private struct AliveChecker: ProcessChecker {
 private func makeManager(
     shell: FakeShellRunner, store: FakeStateStore,
     fs: FakeFileSystem = FakeFileSystem(),
-    prober: PortProber,
     checker: ProcessChecker = AliveChecker(alive: []),
     terminator: FakeProcessTerminator = FakeProcessTerminator()
 )
@@ -21,9 +20,6 @@ private func makeManager(
     let renderer = TemplateRenderer()
     return WorkspaceManager(
         git: GitService(shell: shell),
-        portAllocator: PortAllocator(
-            config: PortConfig(lower: 4000, upper: 4010),
-            store: store, prober: prober),
         database: DatabaseService(shell: shell, renderer: renderer),
         envLinker: EnvLinker(fs: fs), fs: fs,
         setupRunner: SetupRunner(shell: shell, renderer: renderer),
@@ -32,14 +28,12 @@ private func makeManager(
     )
 }
 
-private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true } }
-
 @Test func createPersistsRunningRecordWithPortAndDB() async throws {
     let shell = FakeShellRunner()
     shell.handles = [("npm run dev", { FakeProcessHandle(pid: 900, exitCode: 0, lines: []) })]
     let store = FakeStateStore()
     let fs = FakeFileSystem(); fs.existing = ["/repo/.env"]
-    let mgr = makeManager(shell: shell, store: store, fs: fs, prober: FreeProber())
+    let mgr = makeManager(shell: shell, store: store, fs: fs)
 
     let rec = try await mgr.create(
         config: Fixtures.config(), repo: repo,
@@ -62,7 +56,7 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     // make the migrate step fail
     shell.handles = [("npm run migrate", { FakeProcessHandle(pid: 1, exitCode: 1, lines: []) })]
     let store = FakeStateStore()
-    let mgr = makeManager(shell: shell, store: store, prober: FreeProber())
+    let mgr = makeManager(shell: shell, store: store)
 
     await #expect(throws: SetupError.self) {
         _ = try await mgr.create(
@@ -83,7 +77,7 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     let store = FakeStateStore()
     // worktree dir lingers after `git worktree remove` (simulates a partial/failed add)
     let fs = FakeFileSystem(); fs.existing = ["/wt/feature_login"]
-    let mgr = makeManager(shell: shell, store: store, fs: fs, prober: FreeProber())
+    let mgr = makeManager(shell: shell, store: store, fs: fs)
 
     await #expect(throws: SetupError.self) {
         _ = try await mgr.create(
@@ -114,7 +108,7 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     shell.throwOnLaunch = ["npm run worker"]
     let store = FakeStateStore()
     let term = FakeProcessTerminator()
-    let mgr = makeManager(shell: shell, store: store, prober: FreeProber(), terminator: term)
+    let mgr = makeManager(shell: shell, store: store, terminator: term)
 
     await #expect(throws: (any Error).self) {
         _ = try await mgr.create(
@@ -134,7 +128,7 @@ private struct FreeProber: PortProber { func isFree(_ port: Int) -> Bool { true 
     shell.handles = [("npm run dev", { FakeProcessHandle(pid: 909, exitCode: 1, lines: []) })]
     let store = FakeStateStore()
     let fs = FakeFileSystem(); fs.existing = ["/repo/.env"]
-    let mgr = makeManager(shell: shell, store: store, fs: fs, prober: FreeProber())
+    let mgr = makeManager(shell: shell, store: store, fs: fs)
 
     let reported = await withCheckedContinuation {
         (c: CheckedContinuation<(String, Int32, Int32), Never>) in
@@ -167,7 +161,7 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
     let store = FakeStateStore()
     let term = FakeProcessTerminator()
     let r = seedRecord(into: store)
-    let mgr = makeManager(shell: shell, store: store, prober: FreeProber(), terminator: term)
+    let mgr = makeManager(shell: shell, store: store, terminator: term)
 
     try await mgr.teardown(
         id: r.id, config: Fixtures.config(), repo: repo,
@@ -192,7 +186,7 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
     ]
     let store = FakeStateStore()
     let r = seedRecord(into: store)
-    let mgr = makeManager(shell: shell, store: store, prober: FreeProber())
+    let mgr = makeManager(shell: shell, store: store)
 
     await #expect(throws: TeardownError.self) {
         try await mgr.teardown(
@@ -216,7 +210,7 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
     let store = FakeStateStore()
     let term = FakeProcessTerminator()
     let r = seedRecord(into: store)
-    let mgr = makeManager(shell: shell, store: store, prober: FreeProber(), terminator: term)
+    let mgr = makeManager(shell: shell, store: store, terminator: term)
 
     try await mgr.teardown(
         id: r.id, config: Fixtures.config(), repo: repo,
@@ -234,7 +228,7 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
     let fs = FakeFileSystem(); fs.existing = ["/wt/feature_login"]
     _ = seedRecord(into: store, pid: 900)  // pid 900 not alive
     let mgr = makeManager(
-        shell: shell, store: store, fs: fs, prober: FreeProber(),
+        shell: shell, store: store, fs: fs,
         checker: AliveChecker(alive: []))
     let result = try mgr.reconcile()
     #expect(result.first?.status == .stopped)
@@ -248,7 +242,7 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
     let fs = FakeFileSystem(); fs.existing = ["/wt/feature_login"]
     _ = seedRecord(into: store, pid: 900)
     let mgr = makeManager(
-        shell: shell, store: store, fs: fs, prober: FreeProber(),
+        shell: shell, store: store, fs: fs,
         checker: AliveChecker(alive: [900]))
     let result = try mgr.reconcile()
     #expect(result.first?.status == .running)
@@ -260,7 +254,7 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
     let fs = FakeFileSystem(); fs.existing = []  // worktree gone
     _ = seedRecord(into: store, pid: nil)
     let mgr = makeManager(
-        shell: shell, store: store, fs: fs, prober: FreeProber(),
+        shell: shell, store: store, fs: fs,
         checker: AliveChecker(alive: []))
     let result = try mgr.reconcile()
     #expect(result.first?.orphaned == true)

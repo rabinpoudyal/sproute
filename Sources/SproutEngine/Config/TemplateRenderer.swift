@@ -6,10 +6,14 @@ public struct TemplateContext: Sendable {
     public var port: Int
     public var dbName: String
     public var worktree: String
+    public var ports: [String: Int]
 
-    public init(project: String, branch: String, port: Int, dbName: String, worktree: String) {
+    public init(
+        project: String, branch: String, port: Int, dbName: String,
+        worktree: String, ports: [String: Int] = [:]
+    ) {
         self.project = project; self.branch = branch; self.port = port
-        self.dbName = dbName; self.worktree = worktree
+        self.dbName = dbName; self.worktree = worktree; self.ports = ports
     }
 
     public var branchSlug: String { Self.slugify(branch) }
@@ -44,6 +48,9 @@ public struct TemplateRenderer: Sendable {
             "{{db_name}}": ctx.dbName,
             "{{worktree}}": ctx.worktree,
         ]
+        for (name, p) in ctx.ports {
+            out = out.replacingOccurrences(of: "{{port.\(name)}}", with: String(p))
+        }
         for (k, v) in map { out = out.replacingOccurrences(of: k, with: v) }
         return out
     }
