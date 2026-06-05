@@ -47,7 +47,7 @@ private func tempFile() -> URL {
 @Test func exhaustionThrows() async throws {
     let a = IPAllocator(fileURL: tempFile())
     for i in 1...254 { _ = try await a.allocate(project: "p", branch: "b\(i)") }
-    await #expect(throws: LoopbackError.self) {
+    await #expect(throws: LoopbackError.exhausted) {
         _ = try await a.allocate(project: "p", branch: "overflow")
     }
 }

@@ -24,7 +24,7 @@ public struct LoopbackAllocation: Codable, Sendable, Equatable {
 public actor IPAllocator {
     private static let prefix = "127.0.10."
     private static let lower = 1
-    private static let upper = 254
+    private static let upper = 254  // .255 reserved (subnet broadcast); .0 is the network address
 
     private let fileURL: URL
 
@@ -33,7 +33,7 @@ public actor IPAllocator {
     }
 
     public func allocate(project: String, branch: String) throws -> String {
-        var table = readAll()
+        var table = try readAll()
         if let existing = table.first(where: {
             $0.project == project && $0.branch == branch
         }) {
@@ -55,14 +55,15 @@ public actor IPAllocator {
         return ip
     }
 
+    // No-op when the entry is absent — teardown must be idempotent; double-release is harmless.
     public func release(project: String, branch: String) throws {
-        var table = readAll()
+        var table = try readAll()
         table.removeAll { $0.project == project && $0.branch == branch }
         try writeAll(table)
     }
 
     public func ip(project: String, branch: String) -> String? {
-        readAll().first(where: {
+        ((try? readAll()) ?? []).first(where: {
             $0.project == project && $0.branch == branch
         })?.ip
     }
@@ -72,15 +73,17 @@ public actor IPAllocator {
         return Int(ip.dropFirst(prefix.count))
     }
 
-    private func readAll() -> [LoopbackAllocation] {
+    private func readAll() throws -> [LoopbackAllocation] {
         guard FileManager.default.fileExists(atPath: fileURL.path),
             let data = try? Data(contentsOf: fileURL), !data.isEmpty
         else {
             return []
         }
-        return
-            (try? JSONDecoder()
-            .decode([LoopbackAllocation].self, from: data)) ?? []
+        do {
+            return try JSONDecoder().decode([LoopbackAllocation].self, from: data)
+        } catch {
+            throw LoopbackError.persistFailed(String(describing: error))
+        }
     }
 
     private func writeAll(_ table: [LoopbackAllocation]) throws {
