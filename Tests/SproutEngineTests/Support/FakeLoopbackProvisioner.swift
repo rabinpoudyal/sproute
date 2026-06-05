@@ -2,7 +2,9 @@ import Foundation
 @testable import SproutEngine
 
 /// Records every setActive call. `failNext` makes the next call throw, to test
-/// provision-failure handling.
+/// provision-failure handling. Uses scoped `withLock` (not bare lock/unlock) so
+/// the locking is safe to call from the async `setActive`, while keeping the
+/// `calls`/`setFailNext` accessors synchronous for use inside `#expect`.
 final class FakeLoopbackProvisioner: LoopbackProvisioner, @unchecked Sendable {
     struct Call: Equatable { let ip: String; let hosts: [String]; let active: Bool }
 
@@ -10,16 +12,17 @@ final class FakeLoopbackProvisioner: LoopbackProvisioner, @unchecked Sendable {
     private var _calls: [Call] = []
     private var _failNext = false
 
-    var calls: [Call] { lock.lock(); defer { lock.unlock() }; return _calls }
+    var calls: [Call] { lock.withLock { _calls } }
 
-    func setFailNext(_ value: Bool) { lock.lock(); _failNext = value; lock.unlock() }
+    func setFailNext(_ value: Bool) { lock.withLock { _failNext = value } }
 
     func setActive(ip: String, hosts: [String], active: Bool) async throws {
-        // Snapshot state before checking fail flag. Since tests are single-threaded,
-        // accessing _calls/_failNext directly in async context is safe.
-        let shouldFail = _failNext
-        _failNext = false
-        _calls.append(Call(ip: ip, hosts: hosts, active: active))
+        let shouldFail = lock.withLock { () -> Bool in
+            let fail = _failNext
+            _failNext = false
+            _calls.append(Call(ip: ip, hosts: hosts, active: active))
+            return fail
+        }
         if shouldFail { throw ProvisionError.helperUnavailable }
     }
 }
