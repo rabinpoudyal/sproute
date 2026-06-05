@@ -298,3 +298,28 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
 
     #expect(rec.bindIP == "127.0.0.1")
 }
+
+@Test func createThreadsBindIPIntoSetupEnv() async throws {
+    var cfg = Fixtures.config()
+    cfg.setup = [SetupStep(name: "setup", command: "bin/setup")]
+    cfg.run = RunConfig(processes: [
+        ProcessConfig(name: "web", command: "rails -p {{port}}", port: 3000)
+    ])
+    let shell = FakeShellRunner()
+    shell.handles = [
+        ("bin/setup", { FakeProcessHandle(pid: 1, exitCode: 0, lines: []) }),
+        ("rails", { FakeProcessHandle(pid: 2, exitCode: 0, lines: []) }),
+    ]
+    let store = FakeStateStore()
+    let fs = FakeFileSystem(); fs.existing = ["/repo/.env"]
+    let mgr = makeManager(shell: shell, store: store, fs: fs)
+
+    _ = try await mgr.create(
+        config: cfg, repo: repo, base: "main", branch: "feature/login",
+        bindIP: "127.0.10.9"
+    ) { _, _ in }
+
+    let setupCall = shell.calls.first { $0.command.contains("bin/setup") }
+    #expect(setupCall?.env["HOST"] == "127.0.10.9")
+    #expect(setupCall?.env["BIND_IP"] == "127.0.10.9")
+}

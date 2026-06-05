@@ -165,7 +165,7 @@ public struct WorkspaceManager: Sendable {
             }
             await rollback(
                 config: config, repo: repo, worktreePath: worktreePath,
-                dbName: dbName, branch: branch,
+                dbName: dbName, branch: branch, bindIP: bindIP,
                 didWorktree: didWorktree, didDB: didDB)
             throw error
         }
@@ -173,7 +173,7 @@ public struct WorkspaceManager: Sendable {
 
     private func rollback(
         config: Config, repo: URL, worktreePath: String, dbName: String,
-        branch: String, didWorktree: Bool, didDB: Bool
+        branch: String, bindIP: String, didWorktree: Bool, didDB: Bool
     ) async {
         // remove any persisted record for this branch
         if let existing = try? store.load().first(where: { $0.branch == branch }) {
@@ -182,7 +182,7 @@ public struct WorkspaceManager: Sendable {
         if didDB {
             let ctx = context(
                 config: config, branch: branch, port: 0, ports: [:],
-                dbName: dbName, worktree: worktreePath)
+                dbName: dbName, worktree: worktreePath, host: bindIP)
             try? await database.drop(config.database, ctx: ctx, cwd: repo)
         }
         // Clean up the worktree directory no matter how far creation got, so a retry
@@ -212,7 +212,8 @@ public struct WorkspaceManager: Sendable {
         let ctx = context(
             config: config, branch: record.branch, port: record.port,
             ports: portPlan(config.run.processes),
-            dbName: record.dbName, worktree: record.worktreePath)
+            dbName: record.dbName, worktree: record.worktreePath,
+            host: record.bindIP)
 
         // pre-hook
         if let pre = config.hooks.preTeardown {
