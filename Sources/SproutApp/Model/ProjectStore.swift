@@ -65,8 +65,6 @@ final class ProjectStore: ObservableObject, Identifiable {
     ) -> WorkspaceManager {
         WorkspaceManager(
             git: GitService(shell: shell),
-            portAllocator: PortAllocator(
-                config: config.port, store: store, prober: BindPortProber()),
             database: DatabaseService(shell: shell, renderer: renderer),
             envLinker: EnvLinker(fs: RealFileSystem()),
             fs: RealFileSystem(),
@@ -114,16 +112,19 @@ final class ProjectStore: ObservableObject, Identifiable {
             .isDirty(worktree: URL(fileURLWithPath: item.record.worktreePath))) ?? false
     }
 
-    private func context(_ rec: WorkspaceRecord) -> TemplateContext {
-        TemplateContext(
+    private func context(_ rec: WorkspaceRecord, process name: String? = nil) -> TemplateContext {
+        let plan = portPlan(config.run.processes)
+        let own = name.flatMap { plan[$0] } ?? rec.port
+        return TemplateContext(
             project: config.project.name, branch: rec.branch,
-            port: rec.port, dbName: rec.dbName, worktree: rec.worktreePath)
+            port: own, dbName: rec.dbName, worktree: rec.worktreePath, ports: plan)
     }
 
-    private func childEnv(_ rec: WorkspaceRecord) -> [String: String] {
+    private func childEnv(_ rec: WorkspaceRecord, process name: String? = nil) -> [String: String] {
+        let ctx = context(rec, process: name)
         let url = DatabaseService(shell: shell, renderer: renderer)
-            .databaseURL(config.database, ctx: context(rec))
-        return ["PORT": String(rec.port), "DATABASE_URL": url]
+            .databaseURL(config.database, ctx: ctx)
+        return ["PORT": String(ctx.port), "DATABASE_URL": url]
     }
 
     // MARK: - Lifecycle actions
@@ -187,9 +188,9 @@ final class ProjectStore: ObservableObject, Identifiable {
         }
         do {
             let pid = try await sup.start(
-                command: command, ctx: context(rec),
+                command: command, ctx: context(rec, process: name),
                 cwd: URL(fileURLWithPath: rec.worktreePath),
-                env: childEnv(rec), onLog: onLog(branch: rec.branch, process: name),
+                env: childEnv(rec, process: name), onLog: onLog(branch: rec.branch, process: name),
                 onExit: onExit)
             supervisors[key] = sup
             upsertProcess(&rec, ProcessState(name: name, pid: pid, status: .running))

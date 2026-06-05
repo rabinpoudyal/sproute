@@ -109,10 +109,6 @@ struct ConfigFormView<Extra: View>: View {
                 TextField("Base dir", text: $draft.baseDir, prompt: Text("../worktrees"))
                 TextField("Branch prefix", text: $draft.branchPrefix, prompt: Text("feature/"))
             }
-            Section("Port range") {
-                TextField("Lower", text: $draft.portLower)
-                TextField("Upper", text: $draft.portUpper)
-            }
             extra()
         }
         .formStyle(.grouped)
@@ -154,6 +150,8 @@ struct ConfigFormView<Extra: View>: View {
                             .frame(width: 110)
                         TextField("command", text: $proc.command)
                             .font(.callout.monospaced())
+                        TextField("port", text: $proc.port)
+                            .frame(width: 60)
                         Button(role: .destructive) {
                             removeProcess(proc.id)
                         } label: {
@@ -164,7 +162,7 @@ struct ConfigFormView<Extra: View>: View {
                     }
                 }
                 Button {
-                    draft.processes.append(.init(name: "", command: ""))
+                    draft.processes.append(.init(name: "", command: "", port: ""))
                 } label: {
                     Label("Add process", systemImage: "plus")
                 }

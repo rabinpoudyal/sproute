@@ -26,12 +26,6 @@ struct AppError: Identifiable {
             self.init(
                 title: "Setup step “\(name)” failed (exit \(exitCode))",
                 detail: "Check the setup logs above for the command output.")
-        case PortError.noFreePort:
-            self.init(
-                title: "No free port available",
-                detail:
-                    "Every port in the configured range is in use. Tear down a workspace or widen the range in .sprout.toml."
-            )
         case TeardownError.dirtyWorktree:
             self.init(title: "Worktree has uncommitted changes")
         case TeardownError.workspaceNotFound:

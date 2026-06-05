@@ -14,6 +14,13 @@ struct CreateWorkspaceSheet: View {
     private var worktreePreview: String {
         branch.isEmpty ? "—" : "\(project.config.worktree.baseDir)/\(slug)"
     }
+    private var portSummary: String {
+        let plan = portPlan(project.config.run.processes)
+        if plan.isEmpty { return "none" }
+        return plan.sorted { $0.value < $1.value }
+            .map { "\($0.key):\($0.value)" }
+            .joined(separator: "  ")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -25,9 +32,7 @@ struct CreateWorkspaceSheet: View {
                 TextField("Base branch", text: $base)
                     .disabled(creating)
                 LabeledContent("Database", value: dbPreview)
-                LabeledContent(
-                    "Port",
-                    value: "auto (\(project.config.port.lower)–\(project.config.port.upper))")
+                LabeledContent("Ports", value: portSummary)
                 LabeledContent("Worktree", value: worktreePreview)
             }
             .formStyle(.grouped)

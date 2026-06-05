@@ -103,7 +103,7 @@ struct WorkspaceDetailView: View {
                 }
             }
             Section {
-                field("Port", ":\(rec.port)")
+                portRows
                 field("Database", rec.dbName)
                 field("Branch", rec.branch)
                 field("Worktree", rec.worktreePath)
@@ -248,6 +248,17 @@ struct WorkspaceDetailView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(k).font(.caption2).foregroundStyle(.secondary)
             Text(v).font(.callout.monospaced())
+        }
+    }
+
+    @ViewBuilder private var portRows: some View {
+        let plan = portPlan(project.config.run.processes)
+        if plan.isEmpty {
+            field("Port", "none")
+        } else {
+            ForEach(plan.sorted { $0.value < $1.value }, id: \.key) { name, port in
+                field(name, ":\(port)")
+            }
         }
     }
 

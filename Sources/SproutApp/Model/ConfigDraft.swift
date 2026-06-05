@@ -19,13 +19,12 @@ final class ConfigDraft: ObservableObject {
         let id = UUID()
         var name: String
         var command: String
+        var port: String
     }
 
     @Published var projectName: String
     @Published var baseDir: String
     @Published var branchPrefix: String
-    @Published var portLower: String
-    @Published var portUpper: String
     @Published var symlinkSources: [Source]
     @Published var localFile: String
     @Published var dbCreate: String
@@ -42,15 +41,15 @@ final class ConfigDraft: ObservableObject {
         projectName = c.project.name
         baseDir = c.worktree.baseDir
         branchPrefix = c.worktree.branchPrefix
-        portLower = String(c.port.lower)
-        portUpper = String(c.port.upper)
         symlinkSources = c.env.symlinkSources.map { Source(value: $0) }
         localFile = c.env.localFile
         dbCreate = c.database.createCommand
         dbDrop = c.database.dropCommand
         dbURL = c.database.urlTemplate
         setup = c.setup.map { Step(name: $0.name, command: $0.command) }
-        processes = c.run.processes.map { ProcessRow(name: $0.name, command: $0.command) }
+        processes = c.run.processes.map {
+            ProcessRow(name: $0.name, command: $0.command, port: $0.port.map(String.init) ?? "")
+        }
         consoles = c.run.consoles
         preTeardown = c.hooks.preTeardown ?? ""
         postTeardown = c.hooks.postTeardown ?? ""
@@ -62,7 +61,6 @@ final class ConfigDraft: ObservableObject {
             Config(
                 project: ProjectConfig(name: ""),
                 worktree: WorktreeConfig(baseDir: "../worktrees", branchPrefix: "feature/"),
-                port: PortConfig(lower: 3000, upper: 3020),
                 env: EnvConfig(symlinkSources: [], localFile: ".env.local"),
                 database: DatabaseConfig(
                     createCommand: "createdb {{db_name}}",
@@ -81,13 +79,6 @@ final class ConfigDraft: ObservableObject {
         guard !baseDir.trimmingCharacters(in: .whitespaces).isEmpty else {
             throw DraftError.empty("Worktree base dir")
         }
-        guard let lower = Int(portLower.trimmingCharacters(in: .whitespaces)) else {
-            throw DraftError.notAnInt("Port lower bound")
-        }
-        guard let upper = Int(portUpper.trimmingCharacters(in: .whitespaces)) else {
-            throw DraftError.notAnInt("Port upper bound")
-        }
-        guard lower <= upper else { throw DraftError.portRange }
 
         let sources =
             symlinkSources
@@ -102,9 +93,15 @@ final class ConfigDraft: ObservableObject {
         let procs = try processes.compactMap { row -> ProcessConfig? in
             let n = row.name.trimmingCharacters(in: .whitespaces)
             let c = row.command.trimmingCharacters(in: .whitespaces)
-            if n.isEmpty, c.isEmpty { return nil }  // drop fully-blank rows
+            let pStr = row.port.trimmingCharacters(in: .whitespaces)
+            if n.isEmpty, c.isEmpty, pStr.isEmpty { return nil }  // drop fully-blank rows
             guard !n.isEmpty, !c.isEmpty else { throw DraftError.incompleteProcess }
-            return ProcessConfig(name: n, command: c)
+            var port: Int? = nil
+            if !pStr.isEmpty {
+                guard let v = Int(pStr) else { throw DraftError.notAnInt("Port for \(n)") }
+                port = v
+            }
+            return ProcessConfig(name: n, command: c, port: port)
         }
 
         func optional(_ s: String) -> String? {
@@ -115,7 +112,6 @@ final class ConfigDraft: ObservableObject {
         return Config(
             project: ProjectConfig(name: name),
             worktree: WorktreeConfig(baseDir: baseDir, branchPrefix: branchPrefix),
-            port: PortConfig(lower: lower, upper: upper),
             env: EnvConfig(symlinkSources: sources, localFile: localFile),
             database: DatabaseConfig(
                 createCommand: dbCreate, dropCommand: dbDrop, urlTemplate: dbURL),
@@ -129,7 +125,6 @@ final class ConfigDraft: ObservableObject {
 enum DraftError: LocalizedError {
     case empty(String)
     case notAnInt(String)
-    case portRange
     case incompleteStep
     case incompleteProcess
 
@@ -137,7 +132,6 @@ enum DraftError: LocalizedError {
         switch self {
         case .empty(let field): return "\(field) cannot be empty."
         case .notAnInt(let field): return "\(field) must be a whole number."
-        case .portRange: return "Port lower bound must be ≤ the upper bound."
         case .incompleteStep: return "Every setup step needs both a name and a command."
         case .incompleteProcess: return "Every run process needs both a name and a command."
         }
