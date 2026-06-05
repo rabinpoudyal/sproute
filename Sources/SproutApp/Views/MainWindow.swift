@@ -11,6 +11,18 @@ struct MainWindow: View {
     @EnvironmentObject var app: AppModel
     @State private var selection: SidebarSelection?
     @State private var createForProject: ProjectStore?
+    @State private var drawerVisible = false
+    @AppStorage("shellDrawerHeight") private var drawerHeight: Double = 240
+
+    /// The selected workspace as a (store, item) pair, or nil if the selection is not a
+    /// workspace or no longer exists.
+    private var selectedWorkspace: (ProjectStore, WorkspaceItem)? {
+        guard case let .workspace(projectID, id) = selection,
+            let project = app.projects.first(where: { $0.id == projectID }),
+            let item = project.workspaces.first(where: { $0.id == id })
+        else { return nil }
+        return (project, item)
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -22,9 +34,20 @@ struct MainWindow: View {
             )
             .frame(minWidth: 240)
         } detail: {
-            DetailContainer(
-                selection: selection,
-                onNewWorkspace: { createForProject = $0 })
+            VStack(spacing: 0) {
+                DetailContainer(
+                    selection: selection,
+                    onNewWorkspace: { createForProject = $0 })
+                if drawerVisible, let (project, item) = selectedWorkspace {
+                    Divider()
+                    ShellDrawer(
+                        project: project, item: item,
+                        height: Binding(
+                            get: { CGFloat(drawerHeight) },
+                            set: { drawerHeight = Double($0) }),
+                        onClose: { drawerVisible = false })
+                }
+            }
         }
         .sheet(item: $createForProject) { project in
             CreateWorkspaceSheet(project: project)
@@ -40,6 +63,16 @@ struct MainWindow: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .help("Reconcile all projects")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    drawerVisible.toggle()
+                } label: {
+                    Image(systemName: "terminal")
+                }
+                .keyboardShortcut("j", modifiers: .command)
+                .disabled(selectedWorkspace == nil)
+                .help("Toggle shell (⌘J)")
             }
         }
         .onAppear { app.refreshAll() }
