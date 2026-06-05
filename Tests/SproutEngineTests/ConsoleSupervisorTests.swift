@@ -63,6 +63,33 @@ import Testing
         #expect(box.captured?.1 == 0)
         #expect(await sup.list(branch: "feature/x").isEmpty)
     }
+
+    @Test func startShellSpawnsInteractiveAndStaysOutOfConsoleList() async throws {
+        let spawner = FakePTYSpawner()
+        let sup = ConsoleSupervisor(spawner: spawner, renderer: TemplateRenderer())
+        let session = try await sup.startShell(
+            branch: "feature/x", cwd: URL(fileURLWithPath: "/tmp/wt"),
+            env: ["PORT": "4000"], onExit: { _, _ in })
+        #expect(spawner.interactiveCount == 1)
+        #expect(spawner.commands.isEmpty)  // interactive: no -c command
+        // A shell is not a console — the console list must not include it.
+        #expect(await sup.list(branch: "feature/x").isEmpty)
+        // But it is reachable as the branch's shell.
+        let shell = await sup.shell(branch: "feature/x")
+        #expect(shell?.id == session.id)
+        #expect(shell?.name == "shell")
+    }
+
+    @Test func killAllAlsoTerminatesShell() async throws {
+        let spawner = FakePTYSpawner()
+        let sup = ConsoleSupervisor(spawner: spawner, renderer: TemplateRenderer())
+        _ = try await sup.startShell(
+            branch: "feature/x", cwd: URL(fileURLWithPath: "/tmp/wt"),
+            env: [:], onExit: { _, _ in })
+        await sup.killAll(branch: "feature/x")
+        #expect(await sup.shell(branch: "feature/x") == nil)
+        #expect(spawner.handles.first?.terminated == true)
+    }
 }
 
 final class ExitCapture: @unchecked Sendable {
