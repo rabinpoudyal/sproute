@@ -32,7 +32,12 @@ struct SproutAppMain: App {
                 .frame(minWidth: 720, minHeight: 460)
         }
         .commands {
-            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .newItem) {
+                Button("New Project") { app.presentingNewProject = true }
+                    .keyboardShortcut("n", modifiers: .command)
+                Button("Add Project…") { presentAddProjectPanel(app) }
+                    .keyboardShortcut("o", modifiers: .command)
+            }
         }
 
         // Menu-bar surface.

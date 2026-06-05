@@ -9,7 +9,7 @@ enum ANSIText {
     static func parse(_ raw: String, fallback: Color) -> AttributedString {
         var result = AttributedString()
         var state = Style(fallback: fallback)
-        var scalars = Array(raw.unicodeScalars)
+        let scalars = Array(raw.unicodeScalars)
         var i = 0
         var pending = ""
 

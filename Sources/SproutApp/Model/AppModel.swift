@@ -10,6 +10,9 @@ enum AggregateStatus { case idle, running, error }
 final class AppModel: ObservableObject {
     @Published private(set) var projects: [ProjectStore] = []
     @Published var registryError: String?
+    /// Set by the File menu's "New Project" command; the main window observes this
+    /// to present the create-project sheet (menu commands can't touch window state).
+    @Published var presentingNewProject = false
 
     private var registry: ProjectRegistry
     /// Re-publish each child store's changes as our own. Without this, a `@Published`

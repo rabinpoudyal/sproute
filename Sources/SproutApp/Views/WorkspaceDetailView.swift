@@ -13,6 +13,7 @@ struct WorkspaceDetailView: View {
     @State private var confirmDiscard = false
     @State private var dirtyWarning = false
     @State private var selection: DetailSelection?
+    @State private var showInspector = true
 
     /// What the main pane is showing: a process's logs, or a live console session.
     enum DetailSelection: Hashable {
@@ -37,8 +38,6 @@ struct WorkspaceDetailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
-            Divider()
             if let current {
                 selectorBar(current)
                 Divider()
@@ -49,8 +48,12 @@ struct WorkspaceDetailView: View {
                     description: Text("This workspace defines no run processes or consoles."))
             }
         }
-        .navigationTitle(rec.branch)
-        .navigationSubtitle(rec.worktreePath)
+        .navigationTitle(project.name)
+        .navigationSubtitle(rec.branch)
+        .inspector(isPresented: $showInspector) {
+            inspector
+                .inspectorColumnWidth(min: 220, ideal: 260, max: 360)
+        }
         .toolbar { toolbarContent }
         .confirmationDialog(
             "Tear down \(rec.branch)?",
@@ -88,20 +91,42 @@ struct WorkspaceDetailView: View {
         }
     }
 
-    // MARK: header
+    // MARK: inspector
 
-    private var header: some View {
-        HStack(spacing: 16) {
-            StatusBadge(status: rec.status)
-            if item.orphaned {
-                Label("worktree missing", systemImage: "exclamationmark.triangle")
-                    .font(.caption).foregroundStyle(.orange)
+    private var inspector: some View {
+        Form {
+            Section {
+                LabeledContent("Status") { StatusBadge(status: rec.status) }
+                if item.orphaned {
+                    Label("worktree missing", systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                }
             }
-            field("Port", ":\(rec.port)")
-            field("Database", rec.dbName)
-            Spacer()
+            Section {
+                field("Port", ":\(rec.port)")
+                field("Database", rec.dbName)
+                field("Branch", rec.branch)
+                field("Worktree", rec.worktreePath)
+            }
+            Section("Open") {
+                Button {
+                    reveal()
+                } label: {
+                    Label("Reveal in Finder", systemImage: "folder")
+                }
+                Button {
+                    openInEditor()
+                } label: {
+                    Label("Open in Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+                }
+                Button {
+                    openInBrowser()
+                } label: {
+                    Label("Open in Browser", systemImage: "safari")
+                }
+            }
         }
-        .padding()
+        .formStyle(.grouped)
     }
 
     private func selectorBar(_ current: DetailSelection) -> some View {
@@ -231,7 +256,6 @@ struct WorkspaceDetailView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
-            if busy { ProgressView().controlSize(.small) }
             Button {
                 run { await project.startAll(item) }
             } label: {
@@ -254,9 +278,19 @@ struct WorkspaceDetailView: View {
                 Button("Done (push & tear down)") { confirmDone = true }
                 Button("Discard…", role: .destructive) { confirmDiscard = true }
             } label: {
-                Label("Actions", systemImage: "ellipsis.circle")
+                if busy {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Label("Actions", systemImage: "ellipsis.circle")
+                }
             }
             .help("More actions")
+            Button {
+                showInspector.toggle()
+            } label: {
+                Label("Inspector", systemImage: "sidebar.trailing")
+            }
+            .help("Toggle inspector")
         }
     }
 

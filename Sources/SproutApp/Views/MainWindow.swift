@@ -11,14 +11,13 @@ struct MainWindow: View {
     @EnvironmentObject var app: AppModel
     @State private var selection: SidebarSelection?
     @State private var createForProject: ProjectStore?
-    @State private var showingNewProject = false
 
     var body: some View {
         NavigationSplitView {
             SidebarView(
                 selection: $selection,
-                onAddProject: addProject,
-                onNewProject: { showingNewProject = true },
+                onAddProject: { presentAddProjectPanel(app) },
+                onNewProject: { app.presentingNewProject = true },
                 onNewWorkspace: { createForProject = $0 }
             )
             .frame(minWidth: 240)
@@ -30,7 +29,7 @@ struct MainWindow: View {
         .sheet(item: $createForProject) { project in
             CreateWorkspaceSheet(project: project)
         }
-        .sheet(isPresented: $showingNewProject) {
+        .sheet(isPresented: $app.presentingNewProject) {
             CreateProjectSheet()
         }
         .toolbar {
@@ -45,17 +44,20 @@ struct MainWindow: View {
         }
         .onAppear { app.refreshAll() }
     }
+}
 
-    private func addProject() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Add Project"
-        panel.message = "Choose a folder containing a .sprout.toml"
-        if panel.runModal() == .OK, let url = panel.url {
-            app.addProject(url)
-        }
+/// Shared "Add Project" folder picker, used by both the File menu command and the
+/// sidebar empty-state button.
+@MainActor
+func presentAddProjectPanel(_ app: AppModel) {
+    let panel = NSOpenPanel()
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = false
+    panel.allowsMultipleSelection = false
+    panel.prompt = "Add Project"
+    panel.message = "Choose a folder containing a .sprout.toml"
+    if panel.runModal() == .OK, let url = panel.url {
+        app.addProject(url)
     }
 }
 
@@ -127,22 +129,6 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) {
-            if !app.projects.isEmpty {
-                HStack {
-                    Button(action: onNewProject) {
-                        Label("New", systemImage: "plus.circle")
-                            .frame(maxWidth: .infinity)
-                    }
-                    Button(action: onAddProject) {
-                        Label("Add", systemImage: "folder.badge.plus")
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                .buttonStyle(.borderless)
-                .padding(8)
-            }
-        }
     }
 
     private func expansion(for id: String) -> Binding<Bool> {
