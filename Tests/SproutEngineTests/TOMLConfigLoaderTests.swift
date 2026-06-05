@@ -143,6 +143,26 @@ private let sampleTOML = """
     #expect(config.run.consoles.isEmpty)
 }
 
+@Test func roundTripsProcessPortFlag() throws {
+    let config = Config(
+        project: ProjectConfig(name: "shop"),
+        worktree: WorktreeConfig(baseDir: "/wt", branchPrefix: "feature/"),
+        port: PortConfig(lower: 4000, upper: 4010),
+        env: EnvConfig(symlinkSources: [], localFile: ".env.local"),
+        database: DatabaseConfig(
+            createCommand: "createdb {{db_name}}",
+            dropCommand: "dropdb {{db_name}}",
+            urlTemplate: "postgres://localhost/{{db_name}}"),
+        setup: [],
+        run: RunConfig(processes: [
+            ProcessConfig(name: "web", command: "bin/rails server", bindsPort: true),
+            ProcessConfig(name: "worker", command: "bin/jobs", bindsPort: false),
+        ]),
+        hooks: HooksConfig())
+    let reparsed = try TOMLConfigLoader.parse(TOMLConfigWriter.serialize(config))
+    #expect(reparsed.run.processes == config.run.processes)
+}
+
 @Test func missingRequiredKeyThrows() {
     let bad = """
         [project]

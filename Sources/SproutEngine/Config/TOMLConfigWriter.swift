@@ -40,7 +40,10 @@ public enum TOMLConfigWriter {
         let run = TOMLTable()
         let procs = TOMLArray()
         for p in config.run.processes {
-            procs.append(TOMLTable(["name": p.name, "command": p.command]))
+            let t = TOMLTable(
+                ["name": p.name, "command": p.command] as [String: TOMLValueConvertible])
+            if p.bindsPort { t["port"] = true }
+            procs.append(t)
         }
         run["process"] = procs
         let consoles = TOMLArray()
