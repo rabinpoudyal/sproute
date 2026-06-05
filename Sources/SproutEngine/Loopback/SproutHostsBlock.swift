@@ -66,4 +66,19 @@ public enum SproutHostsBlock {
         entries.removeAll { $0.ip == ip }
         return render(head: parsed.head, entries: entries, tail: parsed.tail)
     }
+
+    /// Insert or replace the managed line for `ip`. An empty `hosts` array is
+    /// treated as a removal (so a caller clearing a workspace can pass `[]`).
+    /// Idempotent: re-upserting the same ip+hosts yields identical contents.
+    public static func upsert(contents: String, ip: String, hosts: [String]) -> String {
+        if hosts.isEmpty { return remove(contents: contents, ip: ip) }
+        let parsed = parse(contents)
+        var entries = parsed.entries
+        if let i = entries.firstIndex(where: { $0.ip == ip }) {
+            entries[i].hosts = hosts
+        } else {
+            entries.append(Entry(ip: ip, hosts: hosts))
+        }
+        return render(head: parsed.head, entries: entries, tail: parsed.tail)
+    }
 }
