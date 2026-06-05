@@ -2,7 +2,6 @@ import Foundation
 
 public enum LoopbackError: Error, Equatable {
     case exhausted
-    case notAllocated(branch: String)
     case persistFailed(String)
 }
 
