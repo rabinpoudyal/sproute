@@ -49,11 +49,21 @@ final class FakePTYSpawner: PTYSpawner, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var handles: [FakePTYHandle] = []
     private(set) var commands: [String] = []
+    private(set) var interactiveCount = 0
     private var nextPid: Int32 = 1000
 
     func spawn(command: String, cwd: URL, env: [String: String]) throws -> PTYHandle {
         lock.lock(); defer { lock.unlock() }
         commands.append(command)
+        let h = FakePTYHandle(pid: nextPid)
+        nextPid += 1
+        handles.append(h)
+        return h
+    }
+
+    func spawnInteractive(cwd: URL, env: [String: String]) throws -> PTYHandle {
+        lock.lock(); defer { lock.unlock() }
+        interactiveCount += 1
         let h = FakePTYHandle(pid: nextPid)
         nextPid += 1
         handles.append(h)

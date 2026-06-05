@@ -24,6 +24,7 @@ public protocol PTYHandle: Sendable {
 
 public protocol PTYSpawner: Sendable {
     func spawn(command: String, cwd: URL, env: [String: String]) throws -> PTYHandle
+    func spawnInteractive(cwd: URL, env: [String: String]) throws -> PTYHandle
 }
 
 /// Spawns the login shell under a real pty via `forkpty`, running `$SHELL -l -c <command>`.
@@ -34,10 +35,28 @@ public struct ForkPTYSpawner: PTYSpawner {
     public init(shellPath: String? = nil) {
         self.shellPath = shellPath ?? LoginShellRunner.resolveLoginShell()
     }
+
+    /// `$SHELL -l -c <command>`: login (non-interactive) — matches `LoginShellRunner`.
+    static func loginArgs(_ shell: String, _ command: String) -> [String] {
+        [shell, "-l", "-c", command]
+    }
+    /// `$SHELL -l -i`: login + interactive, so `.zshrc` (rbenv/nvm/aliases) loads.
+    static func interactiveArgs(_ shell: String) -> [String] {
+        [shell, "-l", "-i"]
+    }
+
     public func spawn(command: String, cwd: URL, env: [String: String]) throws -> PTYHandle {
         let merged = ProcessInfo.processInfo.environment.merging(env) { _, new in new }
         return try ForkPTYProcess(
-            shellPath: shellPath, command: command, cwd: cwd.path, env: merged)
+            shellPath: shellPath, argv: Self.loginArgs(shellPath, command),
+            cwd: cwd.path, env: merged)
+    }
+
+    public func spawnInteractive(cwd: URL, env: [String: String]) throws -> PTYHandle {
+        let merged = ProcessInfo.processInfo.environment.merging(env) { _, new in new }
+        return try ForkPTYProcess(
+            shellPath: shellPath, argv: Self.interactiveArgs(shellPath),
+            cwd: cwd.path, env: merged)
     }
 }
 
@@ -64,10 +83,9 @@ final class ForkPTYProcess: PTYHandle, @unchecked Sendable {
     private let masterFD: Int32
     private let masterCloser: MasterFDCloser
 
-    init(shellPath: String, command: String, cwd: String, env: [String: String]) throws {
+    init(shellPath: String, argv: [String], cwd: String, env: [String: String]) throws {
         // Build all C arrays BEFORE forking — only async-signal-safe calls (chdir, execve,
         // _exit) may run in the child between fork and exec.
-        let argv = [shellPath, "-l", "-c", command]
         let cArgs: [UnsafeMutablePointer<CChar>?] = argv.map { strdup($0) } + [nil]
         let cEnv: [UnsafeMutablePointer<CChar>?] =
             env.map { strdup("\($0.key)=\($0.value)") } + [nil]

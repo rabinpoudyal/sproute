@@ -37,4 +37,14 @@ import Testing
         }
         #expect(seen.contains("hello"))
     }
+
+    @Test func loginArgsWrapCommand() {
+        #expect(
+            ForkPTYSpawner.loginArgs("/bin/zsh", "tty") == ["/bin/zsh", "-l", "-c", "tty"])
+    }
+
+    @Test func interactiveArgsAreLoginInteractive() {
+        #expect(
+            ForkPTYSpawner.interactiveArgs("/bin/zsh") == ["/bin/zsh", "-l", "-i"])
+    }
 }
