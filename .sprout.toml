@@ -5,10 +5,6 @@ name = "shop"
 base_dir = "../sprout-worktrees"
 branch_prefix = "feature/"
 
-[port]
-lower = 4000
-upper = 4050
-
 [env]
 symlink_sources = [".env"]
 local_file = ".env.local"
@@ -27,4 +23,8 @@ name = "migrate"
 command = "npm run migrate"
 
 [run]
-server_command = "npm run dev"
+
+[[run.process]]
+name = "server"
+command = "npm run dev -- --port {{port}}"
+port = 4000
