@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import SproutEngine
 
 /// Full-width bottom drawer hosting a workspace's persistent interactive shell. The shell
@@ -39,6 +40,9 @@ struct ShellDrawer: View {
                         height = min(maxHeight, max(minHeight, next))
                     }
             )
+            .onHover { inside in
+                if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
+            }
             .help("Drag to resize")
     }
 
@@ -60,6 +64,8 @@ struct ShellDrawer: View {
     @ViewBuilder private var content: some View {
         if let controller = project.shellController(branch: item.record.branch) {
             ConsoleView(controller: controller)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
         } else {
             VStack {
                 Spacer()

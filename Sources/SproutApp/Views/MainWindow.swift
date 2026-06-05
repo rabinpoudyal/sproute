@@ -34,20 +34,11 @@ struct MainWindow: View {
             )
             .frame(minWidth: 240)
         } detail: {
-            VStack(spacing: 0) {
-                DetailContainer(
-                    selection: selection,
-                    onNewWorkspace: { createForProject = $0 })
-                if drawerVisible, let (project, item) = selectedWorkspace {
-                    Divider()
-                    ShellDrawer(
-                        project: project, item: item,
-                        height: Binding(
-                            get: { CGFloat(drawerHeight) },
-                            set: { drawerHeight = Double($0) }),
-                        onClose: { drawerVisible = false })
-                }
-            }
+            DetailContainer(
+                selection: selection,
+                drawerVisible: $drawerVisible,
+                drawerHeight: $drawerHeight,
+                onNewWorkspace: { createForProject = $0 })
         }
         .sheet(item: $createForProject) { project in
             CreateWorkspaceSheet(project: project)
@@ -178,6 +169,8 @@ struct SidebarView: View {
 struct DetailContainer: View {
     @EnvironmentObject var app: AppModel
     let selection: SidebarSelection?
+    @Binding var drawerVisible: Bool
+    @Binding var drawerHeight: Double
     let onNewWorkspace: (ProjectStore) -> Void
 
     var body: some View {
@@ -186,7 +179,9 @@ struct DetailContainer: View {
             if let project = app.projects.first(where: { $0.id == projectID }),
                 let item = project.workspaces.first(where: { $0.id == id })
             {
-                WorkspaceDetailView(project: project, item: item)
+                WorkspaceDetailView(
+                    project: project, item: item,
+                    drawerVisible: $drawerVisible, drawerHeight: $drawerHeight)
             } else {
                 placeholder
             }

@@ -7,6 +7,8 @@ struct WorkspaceDetailView: View {
     @Environment(\.openWindow) private var openWindow
     @ObservedObject var project: ProjectStore
     let item: WorkspaceItem
+    @Binding var drawerVisible: Bool
+    @Binding var drawerHeight: Double
 
     @State private var busy = false
     @State private var confirmDone = false
@@ -46,6 +48,15 @@ struct WorkspaceDetailView: View {
                 ContentUnavailableView(
                     "Nothing to show", systemImage: "bolt.slash",
                     description: Text("This workspace defines no run processes or consoles."))
+            }
+            if drawerVisible {
+                Divider()
+                ShellDrawer(
+                    project: project, item: item,
+                    height: Binding(
+                        get: { CGFloat(drawerHeight) },
+                        set: { drawerHeight = Double($0) }),
+                    onClose: { drawerVisible = false })
             }
         }
         .navigationTitle(project.name)
