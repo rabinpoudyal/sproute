@@ -46,3 +46,25 @@ private func sampleRecord(branch: String = "feature/login") -> WorkspaceRecord {
     try store.remove(id: r.id)
     #expect(try store.load().isEmpty)
 }
+
+@Test func recordDecodesWithoutBindIPDefaultsToLoopback() throws {
+    let json = """
+        {"id":"550e8400-e29b-41d4-a716-446655440000","branch":"main","base":"main",\
+        "worktreePath":"/wt/main","port":3000,"dbName":"shop_main",\
+        "status":"stopped","createdAt":"2026-06-06T00:00:00Z","processes":[]}
+        """
+    let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+    let rec = try dec.decode(WorkspaceRecord.self, from: Data(json.utf8))
+    #expect(rec.bindIP == "127.0.0.1")
+}
+
+@Test func recordRoundTripsBindIP() throws {
+    let rec = WorkspaceRecord(
+        id: UUID(), branch: "main", base: "main", worktreePath: "/wt/main",
+        port: 3000, dbName: "shop_main", status: .stopped,
+        createdAt: Date(timeIntervalSince1970: 0), bindIP: "127.0.10.5")
+    let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
+    let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+    let back = try dec.decode(WorkspaceRecord.self, from: enc.encode(rec))
+    #expect(back.bindIP == "127.0.10.5")
+}
