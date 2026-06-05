@@ -7,13 +7,15 @@ public struct TemplateContext: Sendable {
     public var dbName: String
     public var worktree: String
     public var ports: [String: Int]
+    public var host: String
 
     public init(
         project: String, branch: String, port: Int, dbName: String,
-        worktree: String, ports: [String: Int] = [:]
+        worktree: String, ports: [String: Int] = [:], host: String = "127.0.0.1"
     ) {
         self.project = project; self.branch = branch; self.port = port
         self.dbName = dbName; self.worktree = worktree; self.ports = ports
+        self.host = host
     }
 
     public var branchSlug: String { Self.slugify(branch) }
@@ -45,6 +47,7 @@ public struct TemplateRenderer: Sendable {
             "{{branch}}": ctx.branch,
             "{{branch_slug}}": ctx.branchSlug,
             "{{port}}": String(ctx.port),
+            "{{host}}": ctx.host,
             "{{db_name}}": ctx.dbName,
             "{{worktree}}": ctx.worktree,
         ]

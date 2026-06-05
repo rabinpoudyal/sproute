@@ -41,3 +41,21 @@ import Foundation
     #expect(r.render("-p {{port}}", ctx) == "-p 4000")
     #expect(r.render("VITE={{port.vite}} WEB={{port.web}}", ctx) == "VITE=4001 WEB=4000")
 }
+
+@Test func renderResolvesHostWithDefaultLoopback() {
+    let ctx = TemplateContext(
+        project: "shop", branch: "main", port: 4000,
+        dbName: "shop", worktree: "/wt")
+    #expect(ctx.host == "127.0.0.1")
+    #expect(TemplateRenderer().render("-b {{host}} -p {{port}}", ctx) == "-b 127.0.0.1 -p 4000")
+}
+
+@Test func renderUsesExplicitHost() {
+    let ctx = TemplateContext(
+        project: "shop", branch: "main", port: 3000,
+        dbName: "shop", worktree: "/wt", ports: ["web": 3000], host: "127.0.10.7")
+
+    #expect(
+        TemplateRenderer().render("rails -b {{host}} -p {{port}}", ctx)
+            == "rails -b 127.0.10.7 -p 3000")
+}
