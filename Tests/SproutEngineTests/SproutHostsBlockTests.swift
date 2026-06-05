@@ -81,4 +81,22 @@ import Testing
         #expect(SproutHostsBlock.managedIPs(contents: gone) == [])
         #expect(!gone.contains(SproutHostsBlock.begin))  // empty block dropped
     }
+
+    @Test func removeOneOfManyKeepsOthers() {
+        // Self.withBlock has 127.0.10.7 and 127.0.10.8.
+        let out = SproutHostsBlock.remove(contents: Self.withBlock, ip: "127.0.10.7")
+        #expect(SproutHostsBlock.managedIPs(contents: out) == ["127.0.10.8"])
+        #expect(out.contains("127.0.10.8 web.other.localhost"))
+        #expect(!out.contains("127.0.10.7"))
+        #expect(out.contains(SproutHostsBlock.begin))  // block still present
+    }
+
+    @Test func removeLastDropsTheBlockEntirely() {
+        let one = SproutHostsBlock.upsert(
+            contents: Self.base, ip: "127.0.10.1", hosts: ["web.a.localhost"])
+        let gone = SproutHostsBlock.remove(contents: one, ip: "127.0.10.1")
+        #expect(!gone.contains(SproutHostsBlock.begin))
+        #expect(!gone.contains(SproutHostsBlock.end))
+        #expect(gone.contains("127.0.0.1\tlocalhost"))  // user content intact
+    }
 }
