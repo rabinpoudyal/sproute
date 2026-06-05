@@ -259,3 +259,42 @@ private func seedRecord(into store: FakeStateStore, pid: Int32? = 900) -> Worksp
     let result = try mgr.reconcile()
     #expect(result.first?.orphaned == true)
 }
+
+@Test func createThreadsBindIPIntoRecordAndProcessEnvAndCommand() async throws {
+    var cfg = Fixtures.config()
+    cfg.setup = []
+    cfg.run = RunConfig(processes: [
+        ProcessConfig(name: "web", command: "rails -b {{host}} -p {{port}}", port: 3000)
+    ])
+    let shell = FakeShellRunner()
+    // handle matched on the rendered host substring proves {{host}} was rendered
+    shell.handles = [("rails -b 127.0.10.9", { FakeProcessHandle(pid: 5, exitCode: 0, lines: []) })]
+    let store = FakeStateStore()
+    let fs = FakeFileSystem(); fs.existing = ["/repo/.env"]
+    let mgr = makeManager(shell: shell, store: store, fs: fs)
+
+    let rec = try await mgr.create(
+        config: cfg, repo: repo, base: "main", branch: "feature/login",
+        bindIP: "127.0.10.9"
+    ) { _, _ in }
+
+    #expect(rec.bindIP == "127.0.10.9")
+    let launch = shell.calls.first { $0.command.contains("rails -b") }
+    #expect(launch?.command == "rails -b 127.0.10.9 -p 3000")
+    #expect(launch?.env["HOST"] == "127.0.10.9")
+    #expect(launch?.env["BIND_IP"] == "127.0.10.9")
+}
+
+@Test func createDefaultsBindIPToLoopback() async throws {
+    let shell = FakeShellRunner()
+    shell.handles = [("npm run dev", { FakeProcessHandle(pid: 900, exitCode: 0, lines: []) })]
+    let store = FakeStateStore()
+    let fs = FakeFileSystem(); fs.existing = ["/repo/.env"]
+    let mgr = makeManager(shell: shell, store: store, fs: fs)
+
+    let rec = try await mgr.create(
+        config: Fixtures.config(), repo: repo, base: "main", branch: "feature/login"
+    ) { _, _ in }
+
+    #expect(rec.bindIP == "127.0.0.1")
+}

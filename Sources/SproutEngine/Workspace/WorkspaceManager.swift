@@ -55,11 +55,11 @@ public struct WorkspaceManager: Sendable {
 
     private func context(
         config: Config, branch: String, port: Int, ports: [String: Int],
-        dbName: String, worktree: String
+        dbName: String, worktree: String, host: String = "127.0.0.1"
     ) -> TemplateContext {
         TemplateContext(
             project: config.project.name, branch: branch,
-            port: port, dbName: dbName, worktree: worktree, ports: ports)
+            port: port, dbName: dbName, worktree: worktree, ports: ports, host: host)
     }
 
     /// `log` routes output per stream so each process (and setup) can be shown in its
@@ -73,6 +73,7 @@ public struct WorkspaceManager: Sendable {
     /// the stderr, but nothing signals that it died).
     public func create(
         config: Config, repo: URL, base: String, branch: String,
+        bindIP: String = "127.0.0.1",
         log: @escaping @Sendable (_ stream: String, LogLine) -> Void,
         onProcessExit: @escaping @Sendable (_ name: String, _ pid: Int32, _ code: Int32) -> Void = {
             _, _, _ in
@@ -104,7 +105,7 @@ public struct WorkspaceManager: Sendable {
             let port = primaryPort(config.run.processes)
             let ctx = context(
                 config: config, branch: branch, port: port, ports: plan,
-                dbName: dbName, worktree: worktreePath)
+                dbName: dbName, worktree: worktreePath, host: bindIP)
 
             try await database.create(config.database, ctx: ctx, cwd: repo)
             didDB = true
@@ -120,10 +121,15 @@ public struct WorkspaceManager: Sendable {
             var record = WorkspaceRecord(
                 id: UUID(), branch: branch, base: base, worktreePath: worktreePath,
                 port: port, dbName: dbName, status: .creating,
-                createdAt: Date())
+                createdAt: Date(), bindIP: bindIP)
             try store.upsert(record)
 
-            let childEnv = ["PORT": String(port), "DATABASE_URL": dbURL]
+            let childEnv = [
+                "PORT": String(port),
+                "DATABASE_URL": dbURL,
+                "HOST": bindIP,
+                "BIND_IP": bindIP,
+            ]
             try await setupRunner.run(
                 config.setup, ctx: ctx, cwd: worktreeURL,
                 env: childEnv, onLog: { log("setup", $0) })
@@ -132,8 +138,13 @@ public struct WorkspaceManager: Sendable {
                 let ownPort = proc.port ?? port
                 let pctx = context(
                     config: config, branch: branch, port: ownPort, ports: plan,
-                    dbName: dbName, worktree: worktreePath)
-                let penv = ["PORT": String(ownPort), "DATABASE_URL": dbURL]
+                    dbName: dbName, worktree: worktreePath, host: bindIP)
+                let penv = [
+                    "PORT": String(ownPort),
+                    "DATABASE_URL": dbURL,
+                    "HOST": bindIP,
+                    "BIND_IP": bindIP,
+                ]
                 let supervisor = ServerSupervisor(shell: shell, renderer: renderer)
                 let name = proc.name
                 let pid = try await supervisor.start(
