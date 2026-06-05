@@ -19,7 +19,6 @@ private func makeManager(config: Config, store: StateStore) -> WorkspaceManager 
     let renderer = TemplateRenderer()
     return WorkspaceManager(
         git: GitService(shell: shell),
-        portAllocator: PortAllocator(config: config.port, store: store, prober: BindPortProber()),
         database: DatabaseService(shell: shell, renderer: renderer),
         envLinker: EnvLinker(fs: RealFileSystem()),
         fs: RealFileSystem(),
@@ -97,15 +96,8 @@ struct Server: AsyncParsableCommand {
         }
         let shell = LoginShellRunner()
         let renderer = TemplateRenderer()
-        let ctx = TemplateContext(
-            project: config.project.name, branch: rec.branch,
-            port: rec.port, dbName: rec.dbName, worktree: rec.worktreePath)
         let wt = URL(fileURLWithPath: rec.worktreePath)
-        let env = [
-            "PORT": String(rec.port),
-            "DATABASE_URL": DatabaseService(shell: shell, renderer: renderer)
-                .databaseURL(config.database, ctx: ctx),
-        ]
+        let plan = portPlan(config.run.processes)
 
         // Which configured processes to act on.
         let targets = config.run.processes.filter { process == nil || $0.name == process }
@@ -118,6 +110,15 @@ struct Server: AsyncParsableCommand {
             }
             let new: ProcessState
             if action == "restart" {
+                let ownPort = proc.port ?? rec.port
+                let ctx = TemplateContext(
+                    project: config.project.name, branch: rec.branch,
+                    port: ownPort, dbName: rec.dbName, worktree: rec.worktreePath, ports: plan)
+                let env = [
+                    "PORT": String(ownPort),
+                    "DATABASE_URL": DatabaseService(shell: shell, renderer: renderer)
+                        .databaseURL(config.database, ctx: ctx),
+                ]
                 let sup = ServerSupervisor(shell: shell, renderer: renderer)
                 let pid = try await sup.start(
                     command: proc.command, ctx: ctx, cwd: wt, env: env, onLog: printLog)
