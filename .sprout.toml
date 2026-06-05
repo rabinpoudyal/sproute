@@ -26,5 +26,5 @@ command = "npm run migrate"
 
 [[run.process]]
 name = "server"
-command = "npm run dev -- --port {{port}}"
+command = "npm run dev -- --host {{host}} --port {{port}}"
 port = 4000

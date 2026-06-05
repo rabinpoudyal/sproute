@@ -71,6 +71,13 @@ SPROUT_INTEGRATION=1 swift test          # also runs gated integration tests (re
   the dev server gets EPIPE and dies. The GUI app keeps pipes open, so it stays alive. Expected.
 - **MenuBarExtra launches the app as an accessory** → main window can't take keyboard focus
   (modals won't receive typed input). `AppDelegate` forces `.regular` activation policy on launch.
+- **Per-workspace loopback IPs require binding `{{host}}`, not `0.0.0.0`.** Each
+  workspace gets its own `127.0.10.N` (so branches reuse the same internal ports
+  concurrently). A process that binds `0.0.0.0` grabs the port on *every* loopback
+  IP, re-introducing collisions. Every port-binding `[[run.process]]` command must
+  pass `{{host}}` (e.g. `rails server -b {{host}}`, `vite --host {{host}}
+  --strictPort`). `{{host}}` defaults to `127.0.0.1` when the loopback feature is
+  inactive, so the same config works in both modes.
 
 ## State & paths
 
