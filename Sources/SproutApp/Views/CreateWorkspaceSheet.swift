@@ -6,7 +6,7 @@ struct CreateWorkspaceSheet: View {
     @ObservedObject var project: ProjectStore
 
     @State private var branch = ""
-    @State private var base = "main"
+    @State private var base = "origin/develop"
     @State private var creating = false
 
     private var slug: String { TemplateContext.slugify(branch) }
