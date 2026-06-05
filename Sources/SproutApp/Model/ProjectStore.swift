@@ -45,6 +45,7 @@ final class ProjectStore: ObservableObject, Identifiable {
     private lazy var consoleSupervisor = ConsoleSupervisor(
         spawner: ForkPTYSpawner(), renderer: renderer)
     private var consoleControllers: [UUID: ConsoleSessionController] = [:]
+    private var shellControllers: [String: ConsoleSessionController] = [:]
 
     var name: String { config.project.name }
 
@@ -269,6 +270,40 @@ final class ProjectStore: ObservableObject, Identifiable {
         }
     }
 
+    /// The SwiftTerm controller for a branch's drawer shell, if a session is running.
+    func shellController(branch: String) -> ConsoleSessionController? {
+        shellControllers[branch]
+    }
+
+    /// Lazily start the branch's interactive drawer shell. No-op if one already runs.
+    /// Runs in the worktree with the workspace's child env (PORT, DATABASE_URL).
+    func openShell(_ item: WorkspaceItem) async {
+        let rec = item.record
+        let branch = rec.branch
+        if shellControllers[branch] != nil { return }
+        let onExit: @Sendable (UUID, Int32) -> Void = { [weak self] _, _ in
+            Task { @MainActor in self?.handleShellExit(branch: branch) }
+        }
+        do {
+            let session = try await consoleSupervisor.startShell(
+                branch: branch, cwd: URL(fileURLWithPath: rec.worktreePath),
+                env: childEnv(rec), onExit: onExit)
+            shellControllers[branch] = ConsoleSessionController(
+                id: session.id, handle: session.handle)
+            objectWillChange.send()
+        } catch {
+            lastError = AppError(error)
+        }
+    }
+
+    /// The shell exited (user typed `exit`/Ctrl-D, or it crashed). Drop the controller so
+    /// the drawer shows its placeholder; the next `openShell` starts a fresh session.
+    private func handleShellExit(branch: String) {
+        shellControllers[branch]?.stop()
+        shellControllers[branch] = nil
+        objectWillChange.send()
+    }
+
     func stopConsole(id: UUID) async {
         let branch = consoleSessions.first(where: { $0.id == id })?.branch
         consoleControllers[id]?.stop()
@@ -330,6 +365,8 @@ final class ProjectStore: ObservableObject, Identifiable {
                 consoleControllers[id] = nil
             }
             consoleSessions = consoleSessions.filter { $0.branch != item.record.branch }
+            shellControllers[item.record.branch]?.stop()
+            shellControllers[item.record.branch] = nil
             try await manager.teardown(
                 id: item.record.id, config: config,
                 repo: rootURL, push: push, force: force)
