@@ -212,14 +212,17 @@ struct WorkspaceDetailView: View {
 // MARK: - Process list + detail
 
 /// One row in the workspace process list: status dot, name, optional port badge,
-/// and inline Start/Stop. The row body is a NavigationLink (pushes detail); the
-/// buttons use `.borderless` so a tap hits the button, not the link.
+/// and a single Start/Stop toggle that flips with the process's running state.
+/// The row body is a NavigationLink (pushes detail); the button uses
+/// `.borderless` so a tap hits the button, not the link.
 private struct ProcessRow: View {
     let proc: ProcessConfig
     let status: ProcessStatus?
     let orphaned: Bool
     let onStart: () -> Void
     let onStop: () -> Void
+
+    private var isRunning: Bool { status == .running }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -233,18 +236,12 @@ private struct ProcessRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button(action: onStart) {
-                Image(systemName: "play.fill")
+            Button(action: isRunning ? onStop : onStart) {
+                Image(systemName: isRunning ? "stop.fill" : "play.fill")
             }
             .buttonStyle(.borderless)
-            .help("Start")
-            .disabled(orphaned || status == .running)
-            Button(action: onStop) {
-                Image(systemName: "stop.fill")
-            }
-            .buttonStyle(.borderless)
-            .help("Stop")
-            .disabled(status != .running)
+            .help(isRunning ? "Stop" : "Start")
+            .disabled(orphaned)
         }
         .padding(.vertical, 2)
     }
@@ -332,17 +329,17 @@ private struct ProcessDetailView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    run { await project.startProcess(item, name: name) }
+                    if status == .running {
+                        run { await project.stopProcess(item, name: name) }
+                    } else {
+                        run { await project.startProcess(item, name: name) }
+                    }
                 } label: {
-                    Label("Start", systemImage: "play.fill")
+                    Label(
+                        status == .running ? "Stop" : "Start",
+                        systemImage: status == .running ? "stop.fill" : "play.fill")
                 }
-                .disabled(item.orphaned || status == .running)
-                Button {
-                    run { await project.stopProcess(item, name: name) }
-                } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                }
-                .disabled(status != .running)
+                .disabled(item.orphaned)
                 Button {
                     run { await project.restartProcess(item, name: name) }
                 } label: {
