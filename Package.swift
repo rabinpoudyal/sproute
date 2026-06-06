@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "SproutEngine", targets: ["SproutEngine"]),
         .executable(name: "sprout", targets: ["sprout-cli"]),
         .executable(name: "SproutApp", targets: ["SproutApp"]),
+        .executable(name: "sprout-helper", targets: ["SproutHelper"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
@@ -27,6 +28,10 @@ let package = Package(
             ]
         ),
         .target(name: "CSproutXPC"),
+        .executableTarget(
+            name: "SproutHelper",
+            dependencies: ["SproutEngine", "CSproutXPC"]
+        ),
         .executableTarget(
             name: "SproutApp",
             dependencies: [
