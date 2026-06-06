@@ -61,6 +61,18 @@ import SproutEngine
         try? await store.activateLoopback(rec)
         #expect(prov.calls.filter { $0.active }.count == 2)
     }
+
+    @Test @MainActor func allocateBindIPReturnsLoopbackIPWhenEnabled() async throws {
+        let store = makeLoopbackStore(prov: RecordingProvisioner(), enabled: true, processes: [])
+        let ip = try await store.allocateBindIP(branch: "feature/y")
+        #expect(ip == "127.0.10.1")
+    }
+
+    @Test @MainActor func allocateBindIPReturnsLocalhostWhenDisabled() async throws {
+        let store = makeLoopbackStore(prov: RecordingProvisioner(), enabled: false, processes: [])
+        let ip = try await store.allocateBindIP(branch: "feature/y")
+        #expect(ip == "127.0.0.1")
+    }
 }
 
 /// Records every setActive call. `setFailNext(true)` makes the next call throw,

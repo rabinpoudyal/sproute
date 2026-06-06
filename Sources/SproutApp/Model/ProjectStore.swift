@@ -165,6 +165,13 @@ final class ProjectStore: ObservableObject, Identifiable {
         await loopback.deactivate(branch: rec.branch, ip: rec.bindIP, hosts: loopbackHosts())
     }
 
+    /// The bind IP for a new workspace: an allocated 127.0.10.N when the loopback
+    /// feature is on, otherwise 127.0.0.1 (so disabled mode keeps today's behavior).
+    func allocateBindIP(branch: String) async throws -> String {
+        guard loopbackEnabled else { return "127.0.0.1" }
+        return try await allocator.allocate(project: config.project.name, branch: branch)
+    }
+
     func create(base: String, branch: String) async {
         // Route each stream ("setup" + per-process) to its own buffer so the detail
         // view's per-process consoles show create-time output, not just an unseen
@@ -178,9 +185,10 @@ final class ProjectStore: ObservableObject, Identifiable {
             }
         }
         do {
+            let bindIP = try await allocateBindIP(branch: branch)
             _ = try await manager.create(
                 config: config, repo: rootURL,
-                base: base, branch: branch, log: route, onProcessExit: onExit)
+                base: base, branch: branch, bindIP: bindIP, log: route, onProcessExit: onExit)
             refresh()
         } catch {
             lastError = AppError(error)
