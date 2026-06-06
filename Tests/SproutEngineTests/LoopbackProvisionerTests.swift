@@ -9,12 +9,24 @@ import Foundation
         ProcessConfig(name: "worker", command: "jobs"),  // no port
     ]
     let hosts = loopbackHostnames(project: "My Shop", processes: procs)
-    #expect(hosts == ["web.my_shop.localhost", "vite.my_shop.localhost"])
+    #expect(hosts == ["web.my-shop.localhost", "vite.my-shop.localhost"])
 }
 
 @Test func hostnamesEmptyWhenNoBinders() {
     let procs = [ProcessConfig(name: "worker", command: "jobs")]
     #expect(loopbackHostnames(project: "shop", processes: procs).isEmpty)
+}
+
+/// The gate (`validateLoopbackRequest`) must accept everything the generator
+/// emits, even for names with spaces/symbols — otherwise Plan 2b's helper would
+/// reject its own hostnames at runtime.
+@Test func generatedHostnamesAlwaysPassTheGate() {
+    let procs = [
+        ProcessConfig(name: "Web Server", command: "rails", port: 3000),
+        ProcessConfig(name: "vite_dev!", command: "vite", port: 5173),
+    ]
+    let hosts = loopbackHostnames(project: "My Shop & Co.", processes: procs)
+    #expect(hosts.allSatisfy { isValidLoopbackHostname($0) })
 }
 
 @Test func noopProvisionerDoesNothingAndDoesNotThrow() async throws {

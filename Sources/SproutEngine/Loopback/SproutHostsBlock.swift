@@ -5,8 +5,8 @@ import Foundation
 /// privileged helper (Plan 2b) owns the atomic write. All user/foreign lines
 /// outside the block are preserved verbatim across edits.
 public enum SproutHostsBlock {
-    static let begin = "# BEGIN SPROUT (managed - do not edit)"
-    static let end = "# END SPROUT"
+    public static let begin = "# BEGIN SPROUT (managed - do not edit)"
+    public static let end = "# END SPROUT"
 
     /// One managed mapping: a loopback IP and the hostnames that resolve to it.
     struct Entry: Equatable {
