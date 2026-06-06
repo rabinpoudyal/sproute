@@ -32,14 +32,20 @@ openssl req -x509 -newkey rsa:2048 -nodes \
     -keyout "$TMP/key.pem" -out "$TMP/cert.pem" \
     -days 3650 -config "$TMP/cert.cnf"
 
-openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
-    -name "$NAME" -out "$TMP/identity.p12" -passout pass:
+# `-legacy`: OpenSSL 3 defaults to a SHA-256/AES PKCS12 MAC that macOS's
+# `security import` can't verify; the legacy SHA1/3DES MAC is what the Security
+# framework reads. A non-empty passphrase is also required — `security import`
+# rejects an empty-password PKCS12 with "MAC verification failed". The pass is a
+# throwaway: the .p12 is in a temp dir, imported once, then deleted on exit.
+P12_PASS="sprout-dev"
+openssl pkcs12 -export -legacy -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
+    -name "$NAME" -out "$TMP/identity.p12" -passout "pass:$P12_PASS"
 
 echo "==> importing into login keychain (codesign-accessible)"
 # Drop any prior "Sprout Dev" identity first, else two matching identities make
 # `codesign -s "Sprout Dev"` ambiguous and abort.
 security delete-identity -c "$NAME" "$KEYCHAIN" 2>/dev/null || true
-security import "$TMP/identity.p12" -k "$KEYCHAIN" -P "" -T /usr/bin/codesign
+security import "$TMP/identity.p12" -k "$KEYCHAIN" -P "$P12_PASS" -T /usr/bin/codesign
 
 # Leaf SHA-256 over the DER cert — the form the requirement H"..." literal wants.
 HASH="$(openssl x509 -in "$TMP/cert.pem" -outform DER \
