@@ -26,6 +26,7 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
+        .target(name: "CSproutXPC"),
         .executableTarget(
             name: "SproutApp",
             dependencies: [
