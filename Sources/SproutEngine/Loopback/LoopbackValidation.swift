@@ -35,3 +35,16 @@ public func isValidLoopbackHostname(_ host: String) -> Bool {
     }
     return true
 }
+
+/// The single validation gate the privileged helper runs before any side
+/// effect. Throws `ProvisionError.helperRejected` with a human-readable reason
+/// on the first invalid input. Empty `hosts` is allowed (a deactivation), but
+/// the IP is always range-checked.
+public func validateLoopbackRequest(ip: String, hosts: [String]) throws {
+    guard isValidLoopbackIP(ip) else {
+        throw ProvisionError.helperRejected("invalid ip: \(ip)")
+    }
+    for host in hosts where !isValidLoopbackHostname(host) {
+        throw ProvisionError.helperRejected("invalid hostname: \(host)")
+    }
+}

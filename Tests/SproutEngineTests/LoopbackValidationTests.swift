@@ -46,4 +46,27 @@ import Testing
         #expect(!isValidLoopbackHostname("-web.myproj.localhost"))  // leading hyphen
         #expect(!isValidLoopbackHostname("web-.myproj.localhost"))  // trailing hyphen
     }
+
+    @Test func gateAcceptsValidRequest() throws {
+        try validateLoopbackRequest(
+            ip: "127.0.10.5",
+            hosts: ["web.myproj.localhost", "vite.myproj.localhost"])
+    }
+
+    @Test func gateRejectsBadIP() {
+        #expect(throws: ProvisionError.helperRejected("invalid ip: 10.0.0.1")) {
+            try validateLoopbackRequest(ip: "10.0.0.1", hosts: ["web.myproj.localhost"])
+        }
+    }
+
+    @Test func gateRejectsBadHostname() {
+        #expect(throws: ProvisionError.helperRejected("invalid hostname: evil.com")) {
+            try validateLoopbackRequest(ip: "127.0.10.5", hosts: ["evil.com"])
+        }
+    }
+
+    @Test func gateAcceptsEmptyHosts() throws {
+        // Deactivation passes [] hostnames; the IP must still be in range.
+        try validateLoopbackRequest(ip: "127.0.10.5", hosts: [])
+    }
 }
