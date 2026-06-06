@@ -1,11 +1,10 @@
 import Foundation
 import SproutEngine
 
-// Placeholder app requirement until Plan 2b-3 generates the real
-// identifier + leaf-cert SHA-256 at sign time. The literal below never matches
-// a real signature, so an unsigned dev build rejects all callers until 2b-3
-// wires the generated constant in.
-let appRequirement = "identifier \"com.sprout.app.PLACEHOLDER\""
+// The app and helper pin each other against the self-signed "Sprout Dev" leaf
+// (see SproutSigning). Unsigned dev builds fail closed: the placeholder hash
+// rejects all callers until `make certs` + `make app` produce a real signature.
+let appRequirement = SproutSigning.appRequirement
 
 let delegate = HelperService(appRequirement: appRequirement)
 let listener = NSXPCListener(machServiceName: sproutHelperMachServiceName)

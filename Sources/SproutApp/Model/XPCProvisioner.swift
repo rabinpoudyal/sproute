@@ -9,10 +9,9 @@ import SproutEngine
 /// keeps the seam simple — provisioning is rare (start/stop of the first/last
 /// process per branch).
 final class XPCProvisioner: LoopbackProvisioner, @unchecked Sendable {
-    /// Placeholder helper requirement until Plan 2b-3 generates the real
-    /// identifier + leaf hash. Mirrors the helper's placeholder so dev builds
-    /// fail closed.
-    private let helperRequirement = "identifier \"com.sprout.helper.PLACEHOLDER\""
+    /// The app pins the helper against the self-signed "Sprout Dev" leaf
+    /// (see `SproutSigning`). A swapped-out helper binary fails the check.
+    private let helperRequirement = SproutSigning.helperRequirement
 
     func setActive(ip: String, hosts: [String], active: Bool) async throws {
         let conn = NSXPCConnection(
