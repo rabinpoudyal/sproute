@@ -47,15 +47,17 @@ echo "==> importing into login keychain (codesign-accessible)"
 security delete-identity -c "$NAME" "$KEYCHAIN" 2>/dev/null || true
 security import "$TMP/identity.p12" -k "$KEYCHAIN" -P "$P12_PASS" -T /usr/bin/codesign
 
-# Leaf SHA-256 over the DER cert — the form the requirement H"..." literal wants.
+# Leaf SHA-1 over the DER cert — the requirement language's H"..." literal is a
+# 20-byte (40-hex) SHA-1; a SHA-256 there fails to compile ("invalid hash
+# length") and setCodeSigningRequirement: turns that into an uncaught exception.
 HASH="$(openssl x509 -in "$TMP/cert.pem" -outform DER \
-    | shasum -a 256 | awk '{print $1}' | tr 'a-f' 'A-F')"
-echo "==> leaf cert SHA-256: $HASH"
+    | shasum -a 1 | awk '{print $1}' | tr 'a-f' 'A-F')"
+echo "==> leaf cert SHA-1: $HASH"
 
 echo "==> rewriting $CONST"
-# Replace the 64-hex placeholder/previous value on the leafCertSHA256Hex line.
+# Replace the 40-hex placeholder/previous value on the leafCertSHA1Hex line.
 /usr/bin/sed -i '' -E \
-    "s/\"[0-9A-Fa-f]{64}\"/\"$HASH\"/" \
+    "s/\"[0-9A-Fa-f]{40}\"/\"$HASH\"/" \
     "$CONST"
 
 echo "==> done. Verify with: git diff $CONST"

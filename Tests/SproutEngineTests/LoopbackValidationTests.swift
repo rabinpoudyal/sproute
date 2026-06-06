@@ -28,34 +28,35 @@ import Testing
         #expect(!isValidLoopbackIP(""))
     }
 
-    @Test func acceptsProcessProjectLocalhost() {
-        #expect(isValidLoopbackHostname("web.myproj.localhost"))
-        #expect(isValidLoopbackHostname("vite.my-proj.localhost"))
-        #expect(isValidLoopbackHostname("sidekiq-1.app2.localhost"))
+    @Test func acceptsProcessBranchProjectTest() {
+        #expect(isValidLoopbackHostname("web.main.myproj.test"))
+        #expect(isValidLoopbackHostname("vite.feature-login.my-proj.test"))
+        #expect(isValidLoopbackHostname("sidekiq-1.br2.app2.test"))
     }
 
     @Test func rejectsBadHostnames() {
-        #expect(!isValidLoopbackHostname("web.myproj.local"))  // wrong tld
-        #expect(!isValidLoopbackHostname("web.localhost"))  // only 2 labels
-        #expect(!isValidLoopbackHostname("a.b.c.localhost"))  // too many labels
-        #expect(!isValidLoopbackHostname("WEB.myproj.localhost"))  // uppercase
-        #expect(!isValidLoopbackHostname(".myproj.localhost"))  // empty label
-        #expect(!isValidLoopbackHostname("web.my_proj.localhost"))  // underscore
-        #expect(!isValidLoopbackHostname("web.myproj.localhost "))  // trailing space
+        #expect(!isValidLoopbackHostname("web.main.myproj.local"))  // wrong tld
+        #expect(!isValidLoopbackHostname("web.myproj.localhost"))  // localhost tld rejected
+        #expect(!isValidLoopbackHostname("web.myproj.test"))  // only 3 labels
+        #expect(!isValidLoopbackHostname("a.b.c.d.test"))  // too many labels
+        #expect(!isValidLoopbackHostname("WEB.main.myproj.test"))  // uppercase
+        #expect(!isValidLoopbackHostname(".main.myproj.test"))  // empty label
+        #expect(!isValidLoopbackHostname("web.main.my_proj.test"))  // underscore
+        #expect(!isValidLoopbackHostname("web.main.myproj.test "))  // trailing space
         #expect(!isValidLoopbackHostname(""))
-        #expect(!isValidLoopbackHostname("-web.myproj.localhost"))  // leading hyphen
-        #expect(!isValidLoopbackHostname("web-.myproj.localhost"))  // trailing hyphen
+        #expect(!isValidLoopbackHostname("-web.main.myproj.test"))  // leading hyphen
+        #expect(!isValidLoopbackHostname("web-.main.myproj.test"))  // trailing hyphen
     }
 
     @Test func gateAcceptsValidRequest() throws {
         try validateLoopbackRequest(
             ip: "127.0.10.5",
-            hosts: ["web.myproj.localhost", "vite.myproj.localhost"])
+            hosts: ["web.main.myproj.test", "vite.main.myproj.test"])
     }
 
     @Test func gateRejectsBadIP() {
         #expect(throws: ProvisionError.helperRejected("invalid ip: 10.0.0.1")) {
-            try validateLoopbackRequest(ip: "10.0.0.1", hosts: ["web.myproj.localhost"])
+            try validateLoopbackRequest(ip: "10.0.0.1", hosts: ["web.main.myproj.test"])
         }
     }
 
@@ -74,7 +75,7 @@ import Testing
         #expect(throws: ProvisionError.helperRejected("invalid hostname: evil.com")) {
             try validateLoopbackRequest(
                 ip: "127.0.10.5",
-                hosts: ["web.myproj.localhost", "evil.com"])
+                hosts: ["web.main.myproj.test", "evil.com"])
         }
     }
 }

@@ -7,7 +7,11 @@ import ServiceManagement
 /// wired here but only succeeds once that plist exists and the app is signed.
 @MainActor
 final class HelperManager: ObservableObject {
-    static let daemonPlistName = "com.sprout.helper"
+    /// `SMAppService.daemon(plistName:)` wants the plist's filename, including
+    /// the `.plist` extension — the file shipped at
+    /// `Contents/Library/LaunchDaemons/com.sprout.helper.plist`. Without the
+    /// extension the lookup returns `.notFound` and `register()` throws.
+    static let daemonPlistName = "com.sprout.helper.plist"
 
     @Published private(set) var status: SMAppService.Status = .notRegistered
 

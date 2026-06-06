@@ -44,6 +44,10 @@ final class ProjectStore: ObservableObject, Identifiable {
     private let loopback: LoopbackCoordinator
 
     private var buffers: [ProcessKey: LogBuffer] = [:]
+    /// Tail of the most recent create's streamed output. A failed create rolls
+    /// the workspace back (record + log buffers vanish from the UI), so this is
+    /// the only place left to show what actually failed — surfaced in the error.
+    private var createLogTail: [String] = []
     private var supervisors: [ProcessKey: ServerSupervisor] = [:]
     private lazy var consoleSupervisor = ConsoleSupervisor(
         spawner: ForkPTYSpawner(), renderer: renderer)
@@ -145,24 +149,54 @@ final class ProjectStore: ObservableObject, Identifiable {
 
     // MARK: - Lifecycle actions
 
-    /// Hostnames provisioned for this project's port-binding processes.
-    private func loopbackHosts() -> [String] {
-        loopbackHostnames(project: config.project.name, processes: config.run.processes)
+    /// Hostnames provisioned for a branch's port-binding processes.
+    private func loopbackHosts(branch: String) -> [String] {
+        loopbackHostnames(
+            project: config.project.name, branch: branch, processes: config.run.processes)
+    }
+
+    /// URL the "Open in Browser" action opens for a workspace. With loopback on,
+    /// the primary port-binding process's hostname (`<process>.<branch>.<project>.test`)
+    /// at its port — the workspace binds that IP, not 127.0.0.1, so plain
+    /// `localhost` would hit the wrong (or no) server. Falls back to
+    /// `localhost:<port>` when the feature is off or no process binds a port.
+    func browserURL(_ rec: WorkspaceRecord) -> URL? {
+        guard loopbackEnabled,
+            let primary = config.run.processes.first(where: { $0.port != nil })
+        else {
+            return URL(string: "http://localhost:\(rec.port)")
+        }
+        let hosts = loopbackHostnames(
+            project: config.project.name, branch: rec.branch, processes: [primary])
+        guard let host = hosts.first else {
+            return URL(string: "http://localhost:\(rec.port)")
+        }
+        return URL(string: "http://\(host):\(primary.port ?? rec.port)")
     }
 
     /// Refcounted provision of the branch's loopback alias + hosts (no-op when the
     /// feature is disabled). Throws if provisioning fails so the caller can abort the
     /// start before spawning a process that would bind an unconfigured IP.
     func activateLoopback(_ rec: WorkspaceRecord) async throws {
-        guard loopbackEnabled else { return }
-        try await loopback.activate(branch: rec.branch, ip: rec.bindIP, hosts: loopbackHosts())
+        try await activateLoopback(branch: rec.branch, ip: rec.bindIP)
     }
 
     /// Refcounted release of the branch's loopback alias + hosts (no-op when the
     /// feature is disabled). Never throws — stale state is reaped by the launch sweep.
     func deactivateLoopback(_ rec: WorkspaceRecord) async {
+        await deactivateLoopback(branch: rec.branch, ip: rec.bindIP)
+    }
+
+    /// `create` provisions before it has a persisted record, so it works in
+    /// branch/IP terms directly.
+    private func activateLoopback(branch: String, ip: String) async throws {
         guard loopbackEnabled else { return }
-        await loopback.deactivate(branch: rec.branch, ip: rec.bindIP, hosts: loopbackHosts())
+        try await loopback.activate(branch: branch, ip: ip, hosts: loopbackHosts(branch: branch))
+    }
+
+    private func deactivateLoopback(branch: String, ip: String) async {
+        guard loopbackEnabled else { return }
+        await loopback.deactivate(branch: branch, ip: ip, hosts: loopbackHosts(branch: branch))
     }
 
     /// The bind IP for a new workspace: an allocated 127.0.10.N when the loopback
@@ -190,8 +224,17 @@ final class ProjectStore: ObservableObject, Identifiable {
         // Route each stream ("setup" + per-process) to its own buffer so the detail
         // view's per-process consoles show create-time output, not just an unseen
         // "create" buffer.
+        createLogTail = []
         let route: @Sendable (String, LogLine) -> Void = { [weak self] stream, line in
-            Task { @MainActor in self?.logBuffer(branch: branch, process: stream).append(line) }
+            Task { @MainActor in
+                guard let self else { return }
+                self.logBuffer(branch: branch, process: stream).append(line)
+                self.createLogTail.append(line.text)
+                let cap = 80
+                if self.createLogTail.count > cap {
+                    self.createLogTail.removeFirst(self.createLogTail.count - cap)
+                }
+            }
         }
         let onExit: @Sendable (String, Int32, Int32) -> Void = { [weak self] name, pid, code in
             Task { @MainActor in
@@ -200,12 +243,41 @@ final class ProjectStore: ObservableObject, Identifiable {
         }
         do {
             let bindIP = try await allocateBindIP(branch: branch)
-            _ = try await manager.create(
-                config: config, repo: rootURL,
-                base: base, branch: branch, bindIP: bindIP, log: route, onProcessExit: onExit)
+            // manager.create spawns the run processes bound to bindIP, so the
+            // loopback alias must already be up — otherwise each binds an
+            // unconfigured IP (EADDRNOTAVAIL). Provision once per process to
+            // match the per-process release in handleProcessExit (alias drops on
+            // the last process out). Abort the create if provisioning fails.
+            let procCount = config.run.processes.count
+            do {
+                for _ in 0..<procCount {
+                    try await activateLoopback(branch: branch, ip: bindIP)
+                }
+            } catch {
+                await releaseBindIP(branch: branch)
+                throw error
+            }
+            do {
+                _ = try await manager.create(
+                    config: config, repo: rootURL,
+                    base: base, branch: branch, bindIP: bindIP, log: route, onProcessExit: onExit)
+            } catch {
+                // manager.create rolls back and terminates any started processes
+                // directly (no onProcessExit fires), so undo the activations here.
+                for _ in 0..<procCount {
+                    await deactivateLoopback(branch: branch, ip: bindIP)
+                }
+                throw error
+            }
             refresh()
         } catch {
-            lastError = AppError(error)
+            // The workspace (and its reachable log buffers) just got rolled back,
+            // so attach the captured output tail to the error — otherwise the
+            // "check the logs" message points at logs the user can no longer open.
+            let base = AppError(error)
+            let tail = createLogTail.suffix(40).joined(separator: "\n")
+            lastError =
+                tail.isEmpty ? base : AppError(title: base.title, detail: tail)
         }
     }
 

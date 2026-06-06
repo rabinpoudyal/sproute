@@ -6,14 +6,14 @@ import Testing
     @Test func appRequirementComposesIdentifierAndLeafHash() {
         let expected = codeSigningRequirement(
             identifier: SproutSigning.appIdentifier,
-            leafCertSHA256Hex: SproutSigning.leafCertSHA256Hex)
+            leafCertSHA1Hex: SproutSigning.leafCertSHA1Hex)
         #expect(SproutSigning.appRequirement == expected)
     }
 
     @Test func helperRequirementComposesIdentifierAndLeafHash() {
         let expected = codeSigningRequirement(
             identifier: SproutSigning.helperIdentifier,
-            leafCertSHA256Hex: SproutSigning.leafCertSHA256Hex)
+            leafCertSHA1Hex: SproutSigning.leafCertSHA1Hex)
         #expect(SproutSigning.helperRequirement == expected)
     }
 

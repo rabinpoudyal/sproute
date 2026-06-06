@@ -8,10 +8,10 @@ unsigned CI.
       is unaffected).
 
 ## Cert bootstrap
-- [ ] `make certs` completes; prints a 64-hex leaf SHA-256.
+- [ ] `make certs` completes; prints a 40-hex leaf SHA-1.
 - [ ] `security find-identity -v -p codesigning` lists "Sprout Dev".
 - [ ] `git diff Sources/SproutEngine/Loopback/SigningConstants.swift` shows the
-      `leafCertSHA256Hex` line changed to the printed hash. **Do not commit it.**
+      `leafCertSHA1Hex` line changed to the printed hash. **Do not commit it.**
 
 ## Bundle + sign
 - [ ] `make app` completes; `build/Sprout.app` exists with:

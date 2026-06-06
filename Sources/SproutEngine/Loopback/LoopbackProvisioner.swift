@@ -25,16 +25,25 @@ public struct NoopLoopbackProvisioner: LoopbackProvisioner {
     public func listManaged() async throws -> [String] { [] }
 }
 
-/// Per-process hostnames for a workspace: `<process>.<project>.localhost` for
+/// Per-process hostnames for a workspace: `<process>.<branch>.<project>.test` for
 /// every port-binding process. Used to populate the `/etc/hosts` managed block.
+///
+/// The `.test` TLD (RFC 6761 reserved) is deliberate: macOS hardcodes every
+/// `*.localhost` name to loopback and bypasses `/etc/hosts`, so a `.localhost`
+/// host would always resolve to 127.0.0.1 instead of the workspace's IP. `.test`
+/// has no special resolution, so the managed `/etc/hosts` entries take effect.
+/// The `<branch>` label disambiguates concurrent workspaces of the same project —
+/// without it every branch collides on one hostname mapped to multiple IPs.
 public func loopbackHostnames(
     project: String,
+    branch: String,
     processes: [ProcessConfig]
 ) -> [String] {
     let projectSlug = hostnameSlug(project)
+    let branchSlug = hostnameSlug(branch)
     let portBinders = processes.filter { $0.port != nil }
 
-    return portBinders.map { "\(hostnameSlug($0.name)).\(projectSlug).localhost" }
+    return portBinders.map { "\(hostnameSlug($0.name)).\(branchSlug).\(projectSlug).test" }
 }
 
 /// DNS-label-safe slug for hostnames: lowercase, collapse runs of non-alphanumeric

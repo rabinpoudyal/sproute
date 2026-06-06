@@ -8,13 +8,13 @@ import Foundation
         ProcessConfig(name: "vite", command: "vite", port: 5173),
         ProcessConfig(name: "worker", command: "jobs"),  // no port
     ]
-    let hosts = loopbackHostnames(project: "My Shop", processes: procs)
-    #expect(hosts == ["web.my-shop.localhost", "vite.my-shop.localhost"])
+    let hosts = loopbackHostnames(project: "My Shop", branch: "feature/login", processes: procs)
+    #expect(hosts == ["web.feature-login.my-shop.test", "vite.feature-login.my-shop.test"])
 }
 
 @Test func hostnamesEmptyWhenNoBinders() {
     let procs = [ProcessConfig(name: "worker", command: "jobs")]
-    #expect(loopbackHostnames(project: "shop", processes: procs).isEmpty)
+    #expect(loopbackHostnames(project: "shop", branch: "main", processes: procs).isEmpty)
 }
 
 /// The gate (`validateLoopbackRequest`) must accept everything the generator
@@ -25,7 +25,8 @@ import Foundation
         ProcessConfig(name: "Web Server", command: "rails", port: 3000),
         ProcessConfig(name: "vite_dev!", command: "vite", port: 5173),
     ]
-    let hosts = loopbackHostnames(project: "My Shop & Co.", processes: procs)
+    let hosts = loopbackHostnames(
+        project: "My Shop & Co.", branch: "Wild/Branch #2", processes: procs)
     #expect(hosts.allSatisfy { isValidLoopbackHostname($0) })
 }
 

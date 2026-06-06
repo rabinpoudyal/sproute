@@ -22,14 +22,14 @@ import SproutEngine
         #expect(prov.calls.count == 1)
         #expect(
             prov.calls.first
-                == .init(ip: "127.0.10.7", hosts: ["web.my-shop.localhost"], active: true))
+                == .init(ip: "127.0.10.7", hosts: ["web.feature-x.my-shop.test"], active: true))
 
         await store.deactivateLoopback(rec)
         await store.deactivateLoopback(rec)
         #expect(prov.calls.count == 2)
         #expect(
             prov.calls.last
-                == .init(ip: "127.0.10.7", hosts: ["web.my-shop.localhost"], active: false))
+                == .init(ip: "127.0.10.7", hosts: ["web.feature-x.my-shop.test"], active: false))
     }
 
     @Test @MainActor func disabledSkipsProvisioning() async throws {
@@ -90,6 +90,33 @@ import SproutEngine
         #expect(await alloc.ip(project: "My Shop", branch: "feature/z") == nil)
     }
 
+    @Test @MainActor func browserURLUsesLoopbackHostWhenEnabled() {
+        let store = makeLoopbackStore(
+            prov: RecordingProvisioner(), enabled: true,
+            processes: [ProcessConfig(name: "web", command: "true", port: 3000)])
+        let rec = makeLoopbackRecord(branch: "feature/x", bindIP: "127.0.10.7")
+        let expected = URL(string: "http://web.feature-x.my-shop.test:3000")
+        #expect(store.browserURL(rec) == expected)
+    }
+
+    @Test @MainActor func browserURLUsesLocalhostWhenDisabled() {
+        let store = makeLoopbackStore(
+            prov: RecordingProvisioner(), enabled: false,
+            processes: [ProcessConfig(name: "web", command: "true", port: 3000)])
+        let rec = makeLoopbackRecord(branch: "b", bindIP: "127.0.0.1")
+        let expected = URL(string: "http://localhost:3000")
+        #expect(store.browserURL(rec) == expected)
+    }
+
+    @Test @MainActor func browserURLFallsBackWhenNoPortBinder() {
+        let store = makeLoopbackStore(
+            prov: RecordingProvisioner(), enabled: true,
+            processes: [ProcessConfig(name: "worker", command: "true", port: nil)])
+        let rec = makeLoopbackRecord(branch: "b", bindIP: "127.0.10.3")
+        let expected = URL(string: "http://localhost:3000")
+        #expect(store.browserURL(rec) == expected)
+    }
+
     @Test @MainActor func startAbortsWhenProvisionFails() async {
         let prov = RecordingProvisioner()
         prov.setFailNext(true)
@@ -106,7 +133,7 @@ import SproutEngine
         #expect(prov.calls.count == 1)
         #expect(
             prov.calls.first
-                == .init(ip: "127.0.10.7", hosts: ["web.my-shop.localhost"], active: true))
+                == .init(ip: "127.0.10.7", hosts: ["web.feature-x.my-shop.test"], active: true))
     }
 }
 
