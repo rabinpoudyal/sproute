@@ -39,6 +39,9 @@ final class ProjectStore: ObservableObject, Identifiable {
     private let renderer = TemplateRenderer()
     private let store: StateStore
     private let manager: WorkspaceManager
+    private let loopbackEnabled: Bool
+    private let allocator: IPAllocator
+    private let loopback: LoopbackCoordinator
 
     private var buffers: [ProcessKey: LogBuffer] = [:]
     private var supervisors: [ProcessKey: ServerSupervisor] = [:]
@@ -49,7 +52,12 @@ final class ProjectStore: ObservableObject, Identifiable {
 
     var name: String { config.project.name }
 
-    init(rootURL: URL, config: Config) {
+    init(
+        rootURL: URL, config: Config,
+        loopbackEnabled: Bool = false,
+        allocator: IPAllocator? = nil,
+        loopback: LoopbackCoordinator? = nil
+    ) {
         self.rootURL = rootURL.standardizedFileURL
         self.id = self.rootURL.path
         self.config = config
@@ -58,6 +66,9 @@ final class ProjectStore: ObservableObject, Identifiable {
         self.manager = ProjectStore.makeManager(
             config: config, store: store,
             shell: shell, renderer: renderer)
+        self.loopbackEnabled = loopbackEnabled
+        self.allocator = allocator ?? IPAllocator(fileURL: SproutPaths.loopbackFile)
+        self.loopback = loopback ?? LoopbackCoordinator(provisioner: NoopLoopbackProvisioner())
     }
 
     private static func makeManager(
@@ -133,6 +144,26 @@ final class ProjectStore: ObservableObject, Identifiable {
     }
 
     // MARK: - Lifecycle actions
+
+    /// Hostnames provisioned for this project's port-binding processes.
+    private func loopbackHosts() -> [String] {
+        loopbackHostnames(project: config.project.name, processes: config.run.processes)
+    }
+
+    /// Refcounted provision of the branch's loopback alias + hosts (no-op when the
+    /// feature is disabled). Throws if provisioning fails so the caller can abort the
+    /// start before spawning a process that would bind an unconfigured IP.
+    func activateLoopback(_ rec: WorkspaceRecord) async throws {
+        guard loopbackEnabled else { return }
+        try await loopback.activate(branch: rec.branch, ip: rec.bindIP, hosts: loopbackHosts())
+    }
+
+    /// Refcounted release of the branch's loopback alias + hosts (no-op when the
+    /// feature is disabled). Never throws — stale state is reaped by the launch sweep.
+    func deactivateLoopback(_ rec: WorkspaceRecord) async {
+        guard loopbackEnabled else { return }
+        await loopback.deactivate(branch: rec.branch, ip: rec.bindIP, hosts: loopbackHosts())
+    }
 
     func create(base: String, branch: String) async {
         // Route each stream ("setup" + per-process) to its own buffer so the detail
