@@ -43,6 +43,24 @@ import SproutEngine
         await store.deactivateLoopback(rec)
         #expect(prov.calls.isEmpty)
     }
+
+    @Test @MainActor func activatePropagatesProvisionFailure() async {
+        let prov = RecordingProvisioner()
+        prov.setFailNext(true)
+        let store = makeLoopbackStore(
+            prov: prov, enabled: true,
+            processes: [ProcessConfig(name: "web", command: "true", port: 3000)])
+        let rec = makeLoopbackRecord(branch: "feature/x", bindIP: "127.0.10.7")
+
+        await #expect(throws: ProvisionError.self) {
+            try await store.activateLoopback(rec)
+        }
+        // Failed activate must not leave a refcount: a subsequent activate retries
+        // (provisions again) rather than treating the branch as already active.
+        prov.setFailNext(false)
+        try? await store.activateLoopback(rec)
+        #expect(prov.calls.filter { $0.active }.count == 2)
+    }
 }
 
 /// Records every setActive call. `setFailNext(true)` makes the next call throw,
