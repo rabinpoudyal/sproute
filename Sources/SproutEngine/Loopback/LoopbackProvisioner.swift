@@ -27,8 +27,29 @@ public func loopbackHostnames(
     project: String,
     processes: [ProcessConfig]
 ) -> [String] {
-    let projectSlug = TemplateContext.slugify(project)
+    let projectSlug = hostnameSlug(project)
     let portBinders = processes.filter { $0.port != nil }
 
-    return portBinders.map { "\(TemplateContext.slugify($0.name)).\(projectSlug).localhost" }
+    return portBinders.map { "\(hostnameSlug($0.name)).\(projectSlug).localhost" }
+}
+
+/// DNS-label-safe slug for hostnames: lowercase, collapse runs of non-alphanumeric
+/// chars to a single `-`, trim leading/trailing `-`. Distinct from
+/// `TemplateContext.slugify` (which uses `_`, valid for db names but not hostnames)
+/// so the output always satisfies `isValidLoopbackHostname`.
+func hostnameSlug(_ s: String) -> String {
+    var out = ""
+    var lastHyphen = false
+    for ch in s.lowercased() {
+        if ch.isLetter || ch.isNumber {
+            out.append(ch)
+            lastHyphen = false
+        } else if !lastHyphen {
+            out.append("-")
+            lastHyphen = true
+        }
+    }
+    while out.hasPrefix("-") { out.removeFirst() }
+    while out.hasSuffix("-") { out.removeLast() }
+    return out
 }
