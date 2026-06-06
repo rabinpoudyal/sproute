@@ -41,6 +41,14 @@ unsigned CI.
       then `sudo launchctl kickstart -k system/com.sprout.helper`.
 - [ ] After restart the stale `127.0.10.N` alias and SPROUT hosts block are gone.
 
+## App-launch sweep (crash recovery, helper still running)
+- [ ] With aliases/hosts present from a running workspace, force-quit the app
+      (do NOT reboot — the helper stays loaded).
+- [ ] Relaunch the app. On startup the stale `127.0.10.N` aliases and their
+      SPROUT hosts lines are cleared (nothing is running yet → clean slate).
+- [ ] A workspace whose process genuinely survived the crash (pid still alive)
+      keeps its alias — its IP is in the live set, so the sweep skips it.
+
 ## Pin rejection (fail-closed)
 - [ ] Re-sign `com.sprout.helper` with a *different* identity, relaunch: the app
       refuses the connection (helper-pin mismatch), surfaced as an AppError.
