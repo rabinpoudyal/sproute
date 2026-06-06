@@ -73,6 +73,22 @@ import SproutEngine
         let ip = try await store.allocateBindIP(branch: "feature/y")
         #expect(ip == "127.0.0.1")
     }
+
+    @Test @MainActor func releaseBindIPFreesTheAllocation() async throws {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sprout-rel-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let store = makeLoopbackStore(
+            prov: RecordingProvisioner(), enabled: true, processes: [], allocFile: file)
+
+        // Drive the allocator directly so we control the slot, then release via the seam.
+        let alloc = IPAllocator(fileURL: file)
+        _ = try await alloc.allocate(project: "My Shop", branch: "feature/z")
+        #expect(await alloc.ip(project: "My Shop", branch: "feature/z") == "127.0.10.1")
+
+        await store.releaseBindIP(branch: "feature/z")
+        #expect(await alloc.ip(project: "My Shop", branch: "feature/z") == nil)
+    }
 }
 
 /// Records every setActive call. `setFailNext(true)` makes the next call throw,

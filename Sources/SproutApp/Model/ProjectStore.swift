@@ -172,6 +172,13 @@ final class ProjectStore: ObservableObject, Identifiable {
         return try await allocator.allocate(project: config.project.name, branch: branch)
     }
 
+    /// Return the branch's loopback IP slot to the allocator (no-op when disabled).
+    /// Idempotent: releasing an unallocated branch is harmless.
+    func releaseBindIP(branch: String) async {
+        guard loopbackEnabled else { return }
+        try? await allocator.release(project: config.project.name, branch: branch)
+    }
+
     func create(base: String, branch: String) async {
         // Route each stream ("setup" + per-process) to its own buffer so the detail
         // view's per-process consoles show create-time output, not just an unseen
@@ -413,6 +420,7 @@ final class ProjectStore: ObservableObject, Identifiable {
             try await manager.teardown(
                 id: item.record.id, config: config,
                 repo: rootURL, push: push, force: force)
+            await releaseBindIP(branch: item.record.branch)
             supervisors = supervisors.filter { $0.key.branch != item.record.branch }
             buffers = buffers.filter { $0.key.branch != item.record.branch }
             refresh()
