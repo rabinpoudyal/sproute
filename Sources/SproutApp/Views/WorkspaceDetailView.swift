@@ -4,7 +4,6 @@ import SproutEngine
 
 struct WorkspaceDetailView: View {
     @EnvironmentObject var app: AppModel
-    @Environment(\.openWindow) private var openWindow
     @ObservedObject var project: ProjectStore
     let item: WorkspaceItem
     @Binding var drawerVisible: Bool
@@ -14,40 +13,21 @@ struct WorkspaceDetailView: View {
     @State private var confirmDone = false
     @State private var confirmDiscard = false
     @State private var dirtyWarning = false
-    @State private var selection: DetailSelection?
+    @State private var path: [String] = []
     @State private var showInspector = true
 
-    /// What the main pane is showing: a process's logs, or a live console session.
-    enum DetailSelection: Hashable {
-        case process(String)
-        case console(UUID)
-    }
-
     private var rec: WorkspaceRecord { item.record }
-    private var processNames: [String] { project.config.run.processes.map(\.name) }
-    private var consoles: [ConsoleSessionItem] {
-        project.consoleSessions.filter { $0.branch == rec.branch }
-    }
-    private var consoleConfigNames: [String] { project.config.run.consoles.map(\.name) }
-
-    /// Default to the first process, else the first console, else nil.
-    private var current: DetailSelection? {
-        if let selection { return selection }
-        if let first = processNames.first { return .process(first) }
-        if let firstConsole = consoles.first { return .console(firstConsole.id) }
-        return nil
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let current {
-                selectorBar(current)
-                Divider()
-                content(current)
-            } else {
-                ContentUnavailableView(
-                    "Nothing to show", systemImage: "bolt.slash",
-                    description: Text("This workspace defines no run processes or consoles."))
+            NavigationStack(path: $path) {
+                ProcessListView(project: project, item: item, busy: $busy)
+                    .navigationTitle(project.name)
+                    .navigationSubtitle(rec.branch)
+                    .navigationDestination(for: String.self) { name in
+                        ProcessDetailView(
+                            project: project, item: item, name: name, busy: $busy)
+                    }
             }
             if drawerVisible {
                 Divider()
@@ -59,8 +39,6 @@ struct WorkspaceDetailView: View {
                     onClose: { drawerVisible = false })
             }
         }
-        .navigationTitle(project.name)
-        .navigationSubtitle(rec.branch)
         .inspector(isPresented: $showInspector) {
             inspector
                 .inspectorColumnWidth(min: 220, ideal: 260, max: 360)
@@ -140,121 +118,6 @@ struct WorkspaceDetailView: View {
         .formStyle(.grouped)
     }
 
-    private func selectorBar(_ current: DetailSelection) -> some View {
-        HStack(spacing: 12) {
-            Picker(
-                "View",
-                selection: Binding(
-                    get: { current },
-                    set: { selection = $0 })
-            ) {
-                ForEach(processNames, id: \.self) { proc in
-                    Label {
-                        Text(proc)
-                    } icon: {
-                        Image(systemName: "circle.fill").foregroundStyle(dotColor(proc))
-                    }
-                    .tag(DetailSelection.process(proc))
-                }
-                ForEach(consoles) { session in
-                    Label {
-                        Text(session.name)
-                    } icon: {
-                        Image(systemName: "terminal")
-                    }
-                    .tag(DetailSelection.console(session.id))
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            Spacer()
-
-            if !consoleConfigNames.isEmpty {
-                Menu {
-                    ForEach(consoleConfigNames, id: \.self) { name in
-                        Button(name) {
-                            run {
-                                await project.startConsole(item, name: name)
-                                if let new = project.consoleSessions
-                                    .last(where: { $0.branch == rec.branch && $0.name == name })
-                                {
-                                    selection = .console(new.id)
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    Label("Console", systemImage: "terminal")
-                }
-                .help("Start an interactive console")
-            }
-
-            // Per-selection controls.
-            switch current {
-            case .process(let name):
-                Button {
-                    run { await project.startProcess(item, name: name) }
-                } label: {
-                    Label("Start", systemImage: "play.fill")
-                }
-                Button {
-                    run { await project.stopProcess(item, name: name) }
-                } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                }
-                Button {
-                    run { await project.restartProcess(item, name: name) }
-                } label: {
-                    Label("Restart", systemImage: "arrow.clockwise")
-                }
-            case .console(let id):
-                Button {
-                    run { await project.stopConsole(id: id) }
-                    selection = nil
-                } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                }
-                Button {
-                    openWindow(value: ConsoleTarget(projectID: project.id, sessionID: id))
-                } label: {
-                    Label("Pop Out", systemImage: "rectangle.portrait.and.arrow.right")
-                }
-            }
-        }
-        .labelStyle(.titleAndIcon)
-        .padding(.horizontal).padding(.vertical, 6)
-    }
-
-    @ViewBuilder
-    private func content(_ current: DetailSelection) -> some View {
-        switch current {
-        case .process(let name):
-            LogConsoleView(
-                buffer: project.logBuffer(branch: rec.branch, process: name),
-                onPopOut: {
-                    openWindow(
-                        value: LogTarget(
-                            projectID: project.id, branch: rec.branch, process: name))
-                })
-        case .console(let id):
-            if let controller = project.consoleController(id: id) {
-                ConsoleView(controller: controller)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ContentUnavailableView("Console ended", systemImage: "terminal")
-            }
-        }
-    }
-
-    private func dotColor(_ name: String) -> Color {
-        switch rec.processes.first(where: { $0.name == name })?.status {
-        case .running: return .green
-        case .crashed: return .red
-        default: return .secondary
-        }
-    }
-
     private func field(_ k: String, _ v: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(k).font(.caption2).foregroundStyle(.secondary)
@@ -278,19 +141,6 @@ struct WorkspaceDetailView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
-            Button {
-                run { await project.startAll(item) }
-            } label: {
-                Label("Start all", systemImage: "play.fill")
-            }
-            .disabled(item.orphaned)
-            .help("Start all processes")
-            Button {
-                run { await project.stopAll(item) }
-            } label: {
-                Label("Stop all", systemImage: "stop.fill")
-            }
-            .help("Stop all processes")
             Menu {
                 Button("Reveal in Finder") { reveal() }
                 Button("Open in Editor") { openInEditor() }
@@ -353,8 +203,161 @@ struct WorkspaceDetailView: View {
     }
 
     private func openInBrowser() {
-        if let url = URL(string: "http://localhost:\(rec.port)") {
+        if let url = project.browserURL(rec) {
             NSWorkspace.shared.open(url)
+        }
+    }
+}
+
+// MARK: - Process list + detail
+
+/// One row in the workspace process list: status dot, name, optional port badge,
+/// and inline Start/Stop. The row body is a NavigationLink (pushes detail); the
+/// buttons use `.borderless` so a tap hits the button, not the link.
+private struct ProcessRow: View {
+    let proc: ProcessConfig
+    let status: ProcessStatus?
+    let orphaned: Bool
+    let onStart: () -> Void
+    let onStop: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "circle.fill")
+                .font(.system(size: 8))
+                .foregroundStyle(dotColor)
+            Text(proc.name)
+            if let port = proc.port {
+                Text(":\(port)")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button(action: onStart) {
+                Image(systemName: "play.fill")
+            }
+            .buttonStyle(.borderless)
+            .help("Start")
+            .disabled(orphaned || status == .running)
+            Button(action: onStop) {
+                Image(systemName: "stop.fill")
+            }
+            .buttonStyle(.borderless)
+            .help("Stop")
+            .disabled(status != .running)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var dotColor: Color {
+        switch status {
+        case .running: return .green
+        case .crashed: return .red
+        default: return .secondary
+        }
+    }
+}
+
+/// Stack root: the list of a workspace's run processes.
+private struct ProcessListView: View {
+    @ObservedObject var project: ProjectStore
+    let item: WorkspaceItem
+    @Binding var busy: Bool
+
+    private var rec: WorkspaceRecord { item.record }
+    private var processes: [ProcessConfig] { project.config.run.processes }
+
+    var body: some View {
+        Group {
+            if processes.isEmpty {
+                ContentUnavailableView(
+                    "No processes", systemImage: "bolt.slash",
+                    description: Text("This workspace defines no run processes."))
+            } else {
+                List {
+                    ForEach(processes, id: \.name) { proc in
+                        NavigationLink(value: proc.name) {
+                            ProcessRow(
+                                proc: proc,
+                                status: status(of: proc.name),
+                                orphaned: item.orphaned,
+                                onStart: {
+                                    run { await project.startProcess(item, name: proc.name) }
+                                },
+                                onStop: {
+                                    run { await project.stopProcess(item, name: proc.name) }
+                                })
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func status(of name: String) -> ProcessStatus? {
+        rec.processes.first(where: { $0.name == name })?.status
+    }
+
+    private func run(_ work: @escaping () async -> Void) {
+        busy = true
+        Task {
+            await work()
+            busy = false
+        }
+    }
+}
+
+/// Pushed page: one process's logs plus Start/Stop/Restart in the toolbar.
+private struct ProcessDetailView: View {
+    @Environment(\.openWindow) private var openWindow
+    @ObservedObject var project: ProjectStore
+    let item: WorkspaceItem
+    let name: String
+    @Binding var busy: Bool
+
+    private var rec: WorkspaceRecord { item.record }
+    private var status: ProcessStatus? {
+        rec.processes.first(where: { $0.name == name })?.status
+    }
+
+    var body: some View {
+        LogConsoleView(
+            buffer: project.logBuffer(branch: rec.branch, process: name),
+            onPopOut: {
+                openWindow(
+                    value: LogTarget(projectID: project.id, branch: rec.branch, process: name))
+            }
+        )
+        .navigationTitle(name)
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    run { await project.startProcess(item, name: name) }
+                } label: {
+                    Label("Start", systemImage: "play.fill")
+                }
+                .disabled(item.orphaned || status == .running)
+                Button {
+                    run { await project.stopProcess(item, name: name) }
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                }
+                .disabled(status != .running)
+                Button {
+                    run { await project.restartProcess(item, name: name) }
+                } label: {
+                    Label("Restart", systemImage: "arrow.clockwise")
+                }
+                .disabled(item.orphaned)
+            }
+        }
+    }
+
+    private func run(_ work: @escaping () async -> Void) {
+        busy = true
+        Task {
+            await work()
+            busy = false
         }
     }
 }
