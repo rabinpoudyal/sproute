@@ -19,30 +19,56 @@ final class XPCProvisioner: LoopbackProvisioner, @unchecked Sendable {
             machServiceName: sproutHelperMachServiceName,
             options: .privileged)
         conn.remoteObjectInterface = NSXPCInterface(with: SproutHelperProtocol.self)
-        if #available(macOS 13.0, *) {
-            conn.setCodeSigningRequirement(helperRequirement)
-        }
+        conn.setCodeSigningRequirement(helperRequirement)
         conn.resume()
         defer { conn.invalidate() }
 
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
+            let once = OnceResumer(continuation)
             let proxy =
                 conn.remoteObjectProxyWithErrorHandler { err in
-                    continuation.resume(throwing: ProvisionError.helperRejected("\(err)"))
+                    once.resume(throwing: ProvisionError.helperRejected("\(err)"))
                 } as? SproutHelperProtocol
             guard let proxy else {
-                continuation.resume(throwing: ProvisionError.helperUnavailable)
+                once.resume(throwing: ProvisionError.helperUnavailable)
                 return
             }
             proxy.setActive(ip: ip, hosts: hosts, active: active) { error in
                 do {
                     try XPCReply.check(error)
-                    continuation.resume()
+                    once.resume(returning: ())
                 } catch {
-                    continuation.resume(throwing: error)
+                    once.resume(throwing: error)
                 }
             }
         }
+    }
+}
+
+/// Ensures a `CheckedContinuation` resumes exactly once. The XPC error handler
+/// and the reply block can both fire (e.g. a connection drop after a reply);
+/// the first call wins and the rest are no-ops. Lock-guarded, hence
+/// `@unchecked Sendable`.
+private final class OnceResumer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+
+    init(_ continuation: CheckedContinuation<Void, Error>) {
+        self.continuation = continuation
+    }
+
+    func resume(returning value: Void) {
+        lock.lock()
+        defer { lock.unlock() }
+        continuation?.resume(returning: ())
+        continuation = nil
+    }
+
+    func resume(throwing error: Error) {
+        lock.lock()
+        defer { lock.unlock() }
+        continuation?.resume(throwing: error)
+        continuation = nil
     }
 }

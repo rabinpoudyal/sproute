@@ -50,7 +50,14 @@ enum PrivilegedEffects {
     }
 
     private static func editHosts(_ transform: (String) -> String) throws {
-        let current = (try? String(contentsOfFile: hostsPath, encoding: .utf8)) ?? ""
+        let current: String
+        do {
+            current = try String(contentsOfFile: hostsPath, encoding: .utf8)
+        } catch {
+            // Fail closed: never overwrite /etc/hosts based on a failed read,
+            // which would discard every non-managed entry in the file.
+            throw ProvisionError.hostsWriteFailed("read failed: \(error)")
+        }
         let updated = transform(current)
         guard updated != current else { return }
         do {
