@@ -34,4 +34,16 @@ public actor LoopbackCoordinator {
             try? await provisioner.setActive(ip: ip, hosts: hosts, active: false)
         }
     }
+
+    /// Crash-recovery sweep: tear down every managed IP that no longer backs a
+    /// live workspace. Stateless w.r.t. `counts` — it reconciles the helper's
+    /// global `/etc/hosts` block against `live`, not this run's refcounts. Best
+    /// effort: a failed read or teardown is swallowed (the helper-boot sweep is
+    /// the backstop).
+    public func sweep(live: Set<String>) async {
+        let managed = (try? await provisioner.listManaged()) ?? []
+        for ip in staleManagedIPs(managed: managed, live: live) {
+            try? await provisioner.setActive(ip: ip, hosts: [], active: false)
+        }
+    }
 }
