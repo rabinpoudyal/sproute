@@ -10,6 +10,11 @@ enum SproutPaths {
         root.appendingPathComponent("projects.json")
     }
 
+    /// Global loopback IP allocation table (127.0.10.N per project/branch).
+    static var loopbackFile: URL {
+        root.appendingPathComponent("loopback.json")
+    }
+
     /// Per-project state file, scoped by a slug of the project name, so multiple
     /// projects do not share one state.json.
     static func stateFile(projectName: String) -> URL {
