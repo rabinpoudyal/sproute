@@ -18,3 +18,19 @@ public func isValidLoopbackIP(_ ip: String) -> Bool {
     }
     return true
 }
+
+/// True iff `host` is exactly `<label>.<label>.localhost`, where each of the two
+/// leading labels is non-empty and composed only of lowercase letters, digits,
+/// and hyphens. Mirrors `^[a-z0-9-]+\.[a-z0-9-]+\.localhost$`. Rejects anything
+/// that could hijack a real domain in `/etc/hosts`.
+public func isValidLoopbackHostname(_ host: String) -> Bool {
+    let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+    guard labels.count == 3, labels[2] == "localhost" else { return false }
+    let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789-")
+    for label in labels.prefix(2) {
+        guard !label.isEmpty, label.allSatisfy({ allowed.contains($0) }) else {
+            return false
+        }
+    }
+    return true
+}

@@ -27,4 +27,21 @@ import Testing
         #expect(!isValidLoopbackIP("127.0.10.1.5"))
         #expect(!isValidLoopbackIP(""))
     }
+
+    @Test func acceptsProcessProjectLocalhost() {
+        #expect(isValidLoopbackHostname("web.myproj.localhost"))
+        #expect(isValidLoopbackHostname("vite.my-proj.localhost"))
+        #expect(isValidLoopbackHostname("sidekiq-1.app2.localhost"))
+    }
+
+    @Test func rejectsBadHostnames() {
+        #expect(!isValidLoopbackHostname("web.myproj.local"))  // wrong tld
+        #expect(!isValidLoopbackHostname("web.localhost"))  // only 2 labels
+        #expect(!isValidLoopbackHostname("a.b.c.localhost"))  // too many labels
+        #expect(!isValidLoopbackHostname("WEB.myproj.localhost"))  // uppercase
+        #expect(!isValidLoopbackHostname(".myproj.localhost"))  // empty label
+        #expect(!isValidLoopbackHostname("web.my_proj.localhost"))  // underscore
+        #expect(!isValidLoopbackHostname("web.myproj.localhost "))  // trailing space
+        #expect(!isValidLoopbackHostname(""))
+    }
 }
