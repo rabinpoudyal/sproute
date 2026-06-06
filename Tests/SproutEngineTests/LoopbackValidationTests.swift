@@ -43,5 +43,7 @@ import Testing
         #expect(!isValidLoopbackHostname("web.my_proj.localhost"))  // underscore
         #expect(!isValidLoopbackHostname("web.myproj.localhost "))  // trailing space
         #expect(!isValidLoopbackHostname(""))
+        #expect(!isValidLoopbackHostname("-web.myproj.localhost"))  // leading hyphen
+        #expect(!isValidLoopbackHostname("web-.myproj.localhost"))  // trailing hyphen
     }
 }
