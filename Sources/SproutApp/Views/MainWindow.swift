@@ -136,7 +136,9 @@ struct SidebarView: View {
                             value: SidebarSelection.workspace(projectID: project.id, id: item.id)
                         ) {
                             HStack {
-                                StatusBadge(status: item.record.status, showText: false)
+                                Image(systemName: "arrow.triangle.branch")
+                                    .foregroundStyle(item.record.status.color)
+                                    .accessibilityLabel("Status: \(item.record.status.label)")
                                 Text(item.record.branch)
                                 Spacer()
                                 Text(":\(item.record.port)")
@@ -144,6 +146,11 @@ struct SidebarView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .opacity(item.orphaned ? 0.5 : 1)
+                        }
+                        .contextMenu {
+                            Button("Reveal in Finder") { project.revealInFinder(item) }
+                            Button("Open in Editor") { project.openInEditor(item) }
+                            Button("Open in Browser") { project.openInBrowser(item) }
                         }
                     }
                 } label: {

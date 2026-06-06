@@ -1,6 +1,5 @@
-import SwiftUI
-import AppKit
 import SproutEngine
+import SwiftUI
 
 struct WorkspaceDetailView: View {
     @EnvironmentObject var app: AppModel
@@ -13,22 +12,15 @@ struct WorkspaceDetailView: View {
     @State private var confirmDone = false
     @State private var confirmDiscard = false
     @State private var dirtyWarning = false
-    @State private var path: [String] = []
+    @State private var selectedProcess: String?
     @State private var showInspector = true
 
     private var rec: WorkspaceRecord { item.record }
+    private var processNames: [String] { project.config.run.processes.map(\.name) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            NavigationStack(path: $path) {
-                ProcessListView(project: project, item: item, busy: $busy)
-                    .navigationTitle(project.name)
-                    .navigationSubtitle(rec.branch)
-                    .navigationDestination(for: String.self) { name in
-                        ProcessDetailView(
-                            project: project, item: item, name: name, busy: $busy)
-                    }
-            }
+            mainContent
             if drawerVisible {
                 Divider()
                 ShellDrawer(
@@ -39,9 +31,13 @@ struct WorkspaceDetailView: View {
                     onClose: { drawerVisible = false })
             }
         }
+        .navigationTitle(project.name)
+        .navigationSubtitle(rec.branch)
         .inspector(isPresented: $showInspector) {
-            inspector
-                .inspectorColumnWidth(min: 220, ideal: 260, max: 360)
+            ProcessListView(
+                project: project, item: item, busy: $busy, selection: $selectedProcess
+            )
+            .inspectorColumnWidth(min: 240, ideal: 280, max: 380)
         }
         .toolbar { toolbarContent }
         .confirmationDialog(
@@ -92,60 +88,17 @@ struct WorkspaceDetailView: View {
         }
     }
 
-    // MARK: inspector
+    // MARK: main content
 
-    private var inspector: some View {
-        Form {
-            Section {
-                LabeledContent("Status") { StatusBadge(status: rec.status) }
-                if item.orphaned {
-                    Label("worktree missing", systemImage: "exclamationmark.triangle")
-                        .font(.caption).foregroundStyle(.orange)
-                }
-            }
-            Section {
-                portRows
-                field("Database", rec.dbName)
-                field("Branch", rec.branch)
-                field("Worktree", rec.worktreePath)
-            }
-            Section("Open") {
-                Button {
-                    reveal()
-                } label: {
-                    Label("Reveal in Finder", systemImage: "folder")
-                }
-                Button {
-                    openInEditor()
-                } label: {
-                    Label("Open in Editor", systemImage: "chevron.left.forwardslash.chevron.right")
-                }
-                Button {
-                    openInBrowser()
-                } label: {
-                    Label("Open in Browser", systemImage: "safari")
-                }
-            }
-        }
-        .formStyle(.grouped)
-    }
-
-    private func field(_ k: String, _ v: String) -> some View {
-        LabeledContent(k) {
-            Text(v)
-                .font(.callout.monospaced())
-                .textSelection(.enabled)
-        }
-    }
-
-    @ViewBuilder private var portRows: some View {
-        let plan = portPlan(project.config.run.processes)
-        if plan.isEmpty {
-            field("Port", "none")
+    /// The logs of the process selected in the inspector list, or a prompt when
+    /// nothing is selected.
+    @ViewBuilder private var mainContent: some View {
+        if let name = selectedProcess, processNames.contains(name) {
+            ProcessDetailView(project: project, item: item, name: name, busy: $busy)
         } else {
-            ForEach(plan.sorted { $0.value < $1.value }, id: \.key) { name, port in
-                field(name, ":\(port)")
-            }
+            ContentUnavailableView(
+                "Select a Process", systemImage: "list.bullet.rectangle",
+                description: Text("Pick a process from the list to view its logs."))
         }
     }
 
@@ -155,9 +108,9 @@ struct WorkspaceDetailView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             Menu {
-                Button("Reveal in Finder") { reveal() }
-                Button("Open in Editor") { openInEditor() }
-                Button("Open in Browser") { openInBrowser() }
+                Button("Reveal in Finder") { project.revealInFinder(item) }
+                Button("Open in Editor") { project.openInEditor(item) }
+                Button("Open in Browser") { project.openInBrowser(item) }
                 Divider()
                 Button("Push") { run { await project.push(item) } }
                 Button("Done (push & tear down)") { confirmDone = true }
@@ -197,29 +150,6 @@ struct WorkspaceDetailView: View {
         }
     }
 
-    private func reveal() {
-        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: rec.worktreePath)])
-    }
-
-    private func openInEditor() {
-        let url = URL(fileURLWithPath: rec.worktreePath)
-        // Plain `open` on a directory hands it to the default folder handler (Finder).
-        // Open it in VS Code when present, else fall back to the default handler.
-        if let app = NSWorkspace.shared.urlForApplication(
-            withBundleIdentifier: "com.microsoft.VSCode")
-        {
-            NSWorkspace.shared.open(
-                [url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
-        } else {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    private func openInBrowser() {
-        if let url = project.browserURL(rec) {
-            NSWorkspace.shared.open(url)
-        }
-    }
 }
 
 // MARK: - Process list + detail
@@ -286,11 +216,13 @@ private struct ProcessRow: View {
     }
 }
 
-/// Stack root: the list of a workspace's run processes.
+/// Inspector list of a workspace's run processes. Selecting a row drives the
+/// main content (that process's logs).
 private struct ProcessListView: View {
     @ObservedObject var project: ProjectStore
     let item: WorkspaceItem
     @Binding var busy: Bool
+    @Binding var selection: String?
 
     private var rec: WorkspaceRecord { item.record }
     private var processes: [ProcessConfig] { project.config.run.processes }
@@ -302,20 +234,20 @@ private struct ProcessListView: View {
                     "No processes", systemImage: "bolt.slash",
                     description: Text("This workspace defines no run processes."))
             } else {
-                List {
+                List(selection: $selection) {
                     ForEach(processes, id: \.name) { proc in
-                        NavigationLink(value: proc.name) {
-                            ProcessRow(
-                                proc: proc,
-                                status: status(of: proc.name),
-                                orphaned: item.orphaned,
-                                onStart: {
-                                    run { await project.startProcess(item, name: proc.name) }
-                                },
-                                onStop: {
-                                    run { await project.stopProcess(item, name: proc.name) }
-                                })
-                        }
+                        ProcessRow(
+                            proc: proc,
+                            status: status(of: proc.name),
+                            orphaned: item.orphaned,
+                            onStart: {
+                                run { await project.startProcess(item, name: proc.name) }
+                            },
+                            onStop: {
+                                run { await project.stopProcess(item, name: proc.name) }
+                            }
+                        )
+                        .tag(proc.name)
                     }
                 }
             }
@@ -349,14 +281,28 @@ private struct ProcessDetailView: View {
     }
 
     var body: some View {
-        LogConsoleView(
-            buffer: project.logBuffer(branch: rec.branch, process: name),
-            onPopOut: {
-                openWindow(
-                    value: LogTarget(projectID: project.id, branch: rec.branch, process: name))
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text(name).font(.headline)
+                if let port = project.config.run.processes
+                    .first(where: { $0.name == name })?.port
+                {
+                    Text(":\(port)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
             }
-        )
-        .navigationTitle(name)
+            .padding(.horizontal).padding(.vertical, 8)
+            Divider()
+            LogConsoleView(
+                buffer: project.logBuffer(branch: rec.branch, process: name),
+                onPopOut: {
+                    openWindow(
+                        value: LogTarget(projectID: project.id, branch: rec.branch, process: name))
+                }
+            )
+        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {

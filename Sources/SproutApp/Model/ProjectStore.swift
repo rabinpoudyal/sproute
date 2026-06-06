@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SproutEngine
 
@@ -172,6 +173,33 @@ final class ProjectStore: ObservableObject, Identifiable {
             return URL(string: "http://localhost:\(rec.port)")
         }
         return URL(string: "http://\(host):\(primary.port ?? rec.port)")
+    }
+
+    // MARK: open actions
+
+    func revealInFinder(_ item: WorkspaceItem) {
+        NSWorkspace.shared.activateFileViewerSelecting(
+            [URL(fileURLWithPath: item.record.worktreePath)])
+    }
+
+    func openInEditor(_ item: WorkspaceItem) {
+        let url = URL(fileURLWithPath: item.record.worktreePath)
+        // Plain `open` on a directory hands it to the default folder handler (Finder).
+        // Open it in VS Code when present, else fall back to the default handler.
+        if let app = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: "com.microsoft.VSCode")
+        {
+            NSWorkspace.shared.open(
+                [url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+        } else {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    func openInBrowser(_ item: WorkspaceItem) {
+        if let url = browserURL(item.record) {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     /// Refcounted provision of the branch's loopback alias + hosts (no-op when the
