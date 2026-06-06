@@ -90,6 +90,33 @@ import SproutEngine
         #expect(await alloc.ip(project: "My Shop", branch: "feature/z") == nil)
     }
 
+    @Test @MainActor func sweepClearsManagedIPsNotLive() async {
+        let prov = RecordingProvisioner()
+        prov.setManaged(["127.0.10.1", "127.0.10.2"])
+        let store = makeLoopbackStore(
+            prov: prov, enabled: true,
+            processes: [ProcessConfig(name: "web", command: "x", port: 3000)])
+
+        await store.sweepStaleLoopback(live: ["127.0.10.2"])
+
+        let expected: [RecordingProvisioner.Call] = [
+            .init(ip: "127.0.10.1", hosts: [], active: false)
+        ]
+        #expect(prov.calls == expected)
+    }
+
+    @Test @MainActor func sweepIsNoOpWhenDisabled() async {
+        let prov = RecordingProvisioner()
+        prov.setManaged(["127.0.10.1"])
+        let store = makeLoopbackStore(
+            prov: prov, enabled: false,
+            processes: [ProcessConfig(name: "web", command: "x", port: 3000)])
+
+        await store.sweepStaleLoopback(live: [])
+
+        #expect(prov.calls.isEmpty)
+    }
+
     @Test @MainActor func startAbortsWhenProvisionFails() async {
         let prov = RecordingProvisioner()
         prov.setFailNext(true)

@@ -172,6 +172,22 @@ final class ProjectStore: ObservableObject, Identifiable {
         return try await allocator.allocate(project: config.project.name, branch: branch)
     }
 
+    /// Bind IPs of this project's workspaces that are actually running, for the
+    /// launch sweep's "live" set. Empty when the feature is off or nothing runs.
+    func runningBindIPs() -> [String] {
+        guard loopbackEnabled else { return [] }
+        return workspaces.filter { $0.record.status == .running }.map { $0.record.bindIP }
+    }
+
+    /// Tear down managed loopback aliases this project no longer backs (launch
+    /// crash-recovery). No-op when the feature is disabled. `live` is the global
+    /// set of running bind IPs so a straggler from another project isn't cleared
+    /// while it is genuinely in use.
+    func sweepStaleLoopback(live: Set<String>) async {
+        guard loopbackEnabled else { return }
+        await loopback.sweep(live: live)
+    }
+
     /// Return the branch's loopback IP slot to the allocator (no-op when disabled).
     /// Idempotent: releasing an unallocated branch is harmless.
     func releaseBindIP(branch: String) async {

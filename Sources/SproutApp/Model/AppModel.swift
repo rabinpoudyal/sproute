@@ -32,6 +32,18 @@ final class AppModel: ObservableObject {
         registry = ProjectRegistry.load(from: SproutPaths.registryFile)
         loadProjects()
         helper.refresh()
+        Task { await sweepStaleLoopbackAliases() }
+    }
+
+    /// One-shot crash-recovery sweep at launch: ask the helper what it still
+    /// manages and drop aliases no live workspace backs. Runs through a dedicated
+    /// coordinator (the per-project ones are for refcounting). No-op when the
+    /// loopback feature is disabled.
+    private func sweepStaleLoopbackAliases() async {
+        guard loopbackEnabled else { return }
+        let live = Set(projects.flatMap { $0.runningBindIPs() })
+        let coordinator = LoopbackCoordinator(provisioner: XPCProvisioner())
+        await coordinator.sweep(live: live)
     }
 
     func loadProjects() {
