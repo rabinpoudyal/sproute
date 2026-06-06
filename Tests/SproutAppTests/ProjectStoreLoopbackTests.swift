@@ -90,33 +90,6 @@ import SproutEngine
         #expect(await alloc.ip(project: "My Shop", branch: "feature/z") == nil)
     }
 
-    @Test @MainActor func sweepClearsManagedIPsNotLive() async {
-        let prov = RecordingProvisioner()
-        prov.setManaged(["127.0.10.1", "127.0.10.2"])
-        let store = makeLoopbackStore(
-            prov: prov, enabled: true,
-            processes: [ProcessConfig(name: "web", command: "x", port: 3000)])
-
-        await store.sweepStaleLoopback(live: ["127.0.10.2"])
-
-        let expected: [RecordingProvisioner.Call] = [
-            .init(ip: "127.0.10.1", hosts: [], active: false)
-        ]
-        #expect(prov.calls == expected)
-    }
-
-    @Test @MainActor func sweepIsNoOpWhenDisabled() async {
-        let prov = RecordingProvisioner()
-        prov.setManaged(["127.0.10.1"])
-        let store = makeLoopbackStore(
-            prov: prov, enabled: false,
-            processes: [ProcessConfig(name: "web", command: "x", port: 3000)])
-
-        await store.sweepStaleLoopback(live: [])
-
-        #expect(prov.calls.isEmpty)
-    }
-
     @Test @MainActor func startAbortsWhenProvisionFails() async {
         let prov = RecordingProvisioner()
         prov.setFailNext(true)
@@ -146,11 +119,9 @@ final class RecordingProvisioner: LoopbackProvisioner, @unchecked Sendable {
     private let lock = NSLock()
     private var _calls: [Call] = []
     private var _failNext = false
-    private var _managed: [String] = []
 
     var calls: [Call] { lock.withLock { _calls } }
     func setFailNext(_ value: Bool) { lock.withLock { _failNext = value } }
-    func setManaged(_ ips: [String]) { lock.withLock { _managed = ips } }
 
     func setActive(ip: String, hosts: [String], active: Bool) async throws {
         let shouldFail = lock.withLock { () -> Bool in
@@ -162,9 +133,7 @@ final class RecordingProvisioner: LoopbackProvisioner, @unchecked Sendable {
         if shouldFail { throw ProvisionError.helperUnavailable }
     }
 
-    func listManaged() async throws -> [String] {
-        lock.withLock { _managed }
-    }
+    func listManaged() async throws -> [String] { [] }
 }
 
 @MainActor
