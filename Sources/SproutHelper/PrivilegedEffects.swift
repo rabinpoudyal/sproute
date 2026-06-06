@@ -27,6 +27,16 @@ enum PrivilegedEffects {
         return SproutHostsBlock.managedIPs(contents: contents)
     }
 
+    /// Boot/launch sweep: drop every currently-managed IP (its hosts entry and
+    /// `lo0` alias). Run at helper startup (`RunAtLoad`) so a crash or reboot
+    /// can't leave stale aliases behind. Best-effort — a failure on one IP must
+    /// not abort the rest, so per-IP errors are swallowed.
+    static func clearAllManaged() {
+        for ip in managedIPs() {
+            try? apply(ip: ip, hosts: [], active: false)
+        }
+    }
+
     private static func runIfconfig(ip: String, active: Bool) throws {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: LoopbackIfconfig.tool)

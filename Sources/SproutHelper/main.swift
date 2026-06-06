@@ -9,6 +9,10 @@ let appRequirement = SproutSigning.appRequirement
 let delegate = HelperService(appRequirement: appRequirement)
 let listener = NSXPCListener(machServiceName: sproutHelperMachServiceName)
 listener.delegate = delegate
+
+// Clear stale aliases/hosts left by a crash or reboot before serving requests.
+PrivilegedEffects.clearAllManaged()
+
 listener.resume()
 
 // launchd owns the lifetime; park the main thread.
