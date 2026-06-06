@@ -1,3 +1,4 @@
+import ServiceManagement
 import SwiftUI
 
 struct SettingsView: View {
@@ -23,6 +24,30 @@ struct SettingsView: View {
                         }
                     }
                 }
+            }
+            Section("Loopback Helper") {
+                HStack {
+                    Text("Status")
+                    Spacer()
+                    Text(HelperManager.label(for: app.helper.status))
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Button("Install / Enable") {
+                        try? app.helper.install()
+                    }
+                    Button("Remove") {
+                        try? app.helper.uninstall()
+                    }
+                    Spacer()
+                    Button("Refresh") { app.helper.refresh() }
+                }
+                Text(
+                    "Per-workspace loopback IPs require this signed root helper. "
+                        + "Available once the signed build ships."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
             if let err = app.registryError {
                 Section { Text(err).foregroundStyle(.red) }
