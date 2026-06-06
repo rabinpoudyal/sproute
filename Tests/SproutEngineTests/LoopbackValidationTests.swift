@@ -69,4 +69,12 @@ import Testing
         // Deactivation passes [] hostnames; the IP must still be in range.
         try validateLoopbackRequest(ip: "127.0.10.5", hosts: [])
     }
+
+    @Test func gateRejectsBadHostnameInMixedList() {
+        #expect(throws: ProvisionError.helperRejected("invalid hostname: evil.com")) {
+            try validateLoopbackRequest(
+                ip: "127.0.10.5",
+                hosts: ["web.myproj.localhost", "evil.com"])
+        }
+    }
 }
