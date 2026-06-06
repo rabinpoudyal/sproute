@@ -36,6 +36,9 @@ openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
     -name "$NAME" -out "$TMP/identity.p12" -passout pass:
 
 echo "==> importing into login keychain (codesign-accessible)"
+# Drop any prior "Sprout Dev" identity first, else two matching identities make
+# `codesign -s "Sprout Dev"` ambiguous and abort.
+security delete-identity -c "$NAME" "$KEYCHAIN" 2>/dev/null || true
 security import "$TMP/identity.p12" -k "$KEYCHAIN" -P "" -T /usr/bin/codesign
 
 # Leaf SHA-256 over the DER cert — the form the requirement H"..." literal wants.
