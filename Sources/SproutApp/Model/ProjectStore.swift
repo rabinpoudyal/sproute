@@ -214,6 +214,10 @@ final class ProjectStore: ObservableObject, Identifiable {
         rec.processes[i].pid = nil
         rec.status = aggregateStatus(rec.processes)
         try? store.upsert(rec)
+        // A genuine exit (pid matched) releases one refcount; the alias is torn down
+        // on the last process out. Snapshot the record for the async release.
+        let snapshot = rec
+        Task { await self.deactivateLoopback(snapshot) }
         refresh()
     }
 
@@ -229,6 +233,14 @@ final class ProjectStore: ObservableObject, Identifiable {
         // terminate any existing pid for this process
         if let existing = rec.processes.first(where: { $0.name == name })?.pid {
             await PosixProcessTerminator().terminate(pid: existing, graceSeconds: 5)
+        }
+        // Provision the loopback alias on the first start (refcounted). Abort before
+        // spawning if it fails — a process bound to an unconfigured IP would just error.
+        do {
+            try await activateLoopback(rec)
+        } catch {
+            lastError = AppError(error)
+            return
         }
         let sup = ServerSupervisor(shell: shell, renderer: renderer)
         let branch = rec.branch
@@ -248,6 +260,9 @@ final class ProjectStore: ObservableObject, Identifiable {
             try store.upsert(rec)
             refresh()
         } catch {
+            // Spawn failed, so no exit callback will fire to release the refcount —
+            // undo the activate ourselves.
+            await deactivateLoopback(rec)
             lastError = AppError(error)
         }
     }

@@ -89,6 +89,25 @@ import SproutEngine
         await store.releaseBindIP(branch: "feature/z")
         #expect(await alloc.ip(project: "My Shop", branch: "feature/z") == nil)
     }
+
+    @Test @MainActor func startAbortsWhenProvisionFails() async {
+        let prov = RecordingProvisioner()
+        prov.setFailNext(true)
+        let store = makeLoopbackStore(
+            prov: prov, enabled: true,
+            processes: [ProcessConfig(name: "web", command: "true", port: 3000)])
+        let rec = makeLoopbackRecord(branch: "feature/x", bindIP: "127.0.10.7")
+        let item = WorkspaceItem(record: rec, orphaned: false)
+
+        await store.startProcess(item, name: "web")
+
+        // Provision was attempted once and failed; the process was never spawned.
+        #expect(store.lastError != nil)
+        #expect(prov.calls.count == 1)
+        #expect(
+            prov.calls.first
+                == .init(ip: "127.0.10.7", hosts: ["web.my-shop.localhost"], active: true))
+    }
 }
 
 /// Records every setActive call. `setFailNext(true)` makes the next call throw,
