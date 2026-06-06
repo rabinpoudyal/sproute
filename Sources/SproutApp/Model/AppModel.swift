@@ -20,9 +20,18 @@ final class AppModel: ObservableObject {
     /// reaches views that observe AppModel — the sidebar and detail router are stale.
     private var storeSubscriptions: [AnyCancellable] = []
 
+    let helper = HelperManager()
+
+    /// Per-workspace loopback IPs are opt-in until the signed helper ships
+    /// (Plan 2b-3). Off by default keeps production binding 127.0.0.1.
+    var loopbackEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "loopbackEnabled")
+    }
+
     init() {
         registry = ProjectRegistry.load(from: SproutPaths.registryFile)
         loadProjects()
+        helper.refresh()
     }
 
     func loadProjects() {
@@ -31,7 +40,15 @@ final class AppModel: ObservableObject {
             let root = URL(fileURLWithPath: path)
             let configURL = root.appendingPathComponent(".sprout.toml")
             guard let config = try? TOMLConfigLoader.load(path: configURL) else { continue }
-            stores.append(ProjectStore(rootURL: root, config: config))
+            let coordinator =
+                loopbackEnabled
+                ? LoopbackCoordinator(provisioner: XPCProvisioner())
+                : nil
+            stores.append(
+                ProjectStore(
+                    rootURL: root, config: config,
+                    loopbackEnabled: loopbackEnabled,
+                    loopback: coordinator))
         }
         projects = stores
         storeSubscriptions = stores.map { store in
