@@ -25,7 +25,7 @@ struct AppError: Identifiable {
         case let SetupError.stepFailed(_, name, exitCode):
             self.init(
                 title: "Setup step “\(name)” failed (exit \(exitCode))",
-                detail: "Check the setup logs above for the command output.")
+                detail: "Check the setup logs for the command output.")
         case TeardownError.dirtyWorktree:
             self.init(title: "Worktree has uncommitted changes")
         case TeardownError.workspaceNotFound:
@@ -34,6 +34,21 @@ struct AppError: Identifiable {
             self.init(title: "Config is missing a required key", detail: key)
         case let ConfigError.parseFailed(message):
             self.init(title: "Could not parse .sprout.toml", detail: message)
+        case ProvisionError.helperUnavailable:
+            self.init(
+                title: "Loopback helper unavailable",
+                detail: "Enable it in Settings ▸ Loopback, then try again.")
+        case let ProvisionError.helperRejected(reason):
+            self.init(
+                title: "Loopback helper rejected the request",
+                detail: reason
+                    + "\n\nIf you recently updated Sprout, reload the helper: "
+                    + "Settings ▸ Loopback, turn the toggle off then on, so the "
+                    + "latest version is running.")
+        case let ProvisionError.ifconfigFailed(message):
+            self.init(title: "Could not configure loopback alias", detail: message)
+        case let ProvisionError.hostsWriteFailed(message):
+            self.init(title: "Could not update /etc/hosts", detail: message)
         default:
             self.init(title: "Something went wrong", detail: "\(error)")
         }

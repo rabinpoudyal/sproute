@@ -61,6 +61,7 @@ struct MenuBarRow: View {
                 } label: {
                     Image(systemName: "stop.fill")
                 }
+                .accessibilityLabel("Stop \(item.record.branch)")
             } else {
                 Button {
                     toggle { await project.startAll(item) }
@@ -68,6 +69,7 @@ struct MenuBarRow: View {
                     Image(systemName: "play.fill")
                 }
                 .disabled(item.orphaned)
+                .accessibilityLabel("Start \(item.record.branch)")
             }
         }
         .buttonStyle(.borderless)

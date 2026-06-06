@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
 import SproutEngine
 
 enum SidebarSelection: Hashable {
@@ -11,6 +12,7 @@ struct MainWindow: View {
     @EnvironmentObject var app: AppModel
     @State private var selection: SidebarSelection?
     @State private var createForProject: ProjectStore?
+    @State private var showingHelperSetup = false
     @State private var drawerVisible = false
     @AppStorage("shellDrawerHeight") private var drawerHeight: Double = 240
 
@@ -46,6 +48,9 @@ struct MainWindow: View {
         .sheet(isPresented: $app.presentingNewProject) {
             CreateProjectSheet()
         }
+        .sheet(isPresented: $showingHelperSetup) {
+            HelperSetupSheet()
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -54,6 +59,7 @@ struct MainWindow: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .help("Reconcile all projects")
+                .accessibilityLabel("Reconcile all projects")
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -64,9 +70,18 @@ struct MainWindow: View {
                 .keyboardShortcut("j", modifiers: .command)
                 .disabled(selectedWorkspace == nil)
                 .help("Toggle shell (⌘J)")
+                .accessibilityLabel("Toggle shell")
             }
         }
-        .onAppear { app.refreshAll() }
+        .onAppear {
+            app.refreshAll()
+            // Prompt to install/enable the loopback helper on first sight if it
+            // isn't already enabled. Dismissible, so dev builds aren't blocked.
+            app.helper.refresh()
+            if app.helper.status != .enabled {
+                showingHelperSetup = true
+            }
+        }
     }
 }
 
@@ -148,6 +163,7 @@ struct SidebarView: View {
                         }
                         .buttonStyle(.borderless)
                         .help("New workspace in \(project.name)")
+                        .accessibilityLabel("New workspace in \(project.name)")
                     }
                 }
             }

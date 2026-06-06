@@ -25,35 +25,52 @@ struct SettingsView: View {
                     }
                 }
             }
-            Section("Loopback Helper") {
-                HStack {
-                    Text("Status")
-                    Spacer()
-                    Text(HelperManager.label(for: app.helper.status))
-                        .foregroundStyle(.secondary)
-                }
-                HStack {
-                    Button("Install / Enable") {
-                        try? app.helper.install()
-                    }
-                    Button("Remove") {
-                        try? app.helper.uninstall()
-                    }
-                    Spacer()
-                    Button("Refresh") { app.helper.refresh() }
-                }
-                Text(
-                    "Per-workspace loopback IPs require this signed root helper. "
-                        + "Available once the signed build ships."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
+            LoopbackSettingsSection(helper: app.helper)
             if let err = app.registryError {
                 Section { Text(err).foregroundStyle(.red) }
             }
         }
         .formStyle(.grouped)
         .frame(width: 480, height: 320)
+    }
+}
+
+/// Observes `HelperManager` directly so its `@Published status` re-renders this
+/// view — `SettingsView` only observes `AppModel`, which does not republish on
+/// nested object changes. A single toggle installs/removes the daemon.
+private struct LoopbackSettingsSection: View {
+    @ObservedObject var helper: HelperManager
+    @State private var helperError: String?
+
+    var body: some View {
+        Section("Loopback Helper") {
+            Toggle("Per-workspace loopback IPs", isOn: enabledBinding)
+            Text(HelperManager.label(for: helper.status))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if helper.status == .requiresApproval {
+                Button("Open Login Items Settings") {
+                    SMAppService.openSystemSettingsLoginItems()
+                }
+                .font(.caption)
+            }
+            if let helperError {
+                Text(helperError).font(.caption).foregroundStyle(.red)
+            }
+        }
+        .onAppear { helper.refresh() }
+    }
+
+    private var enabledBinding: Binding<Bool> {
+        Binding(
+            get: { helper.status == .enabled },
+            set: { on in
+                helperError = nil
+                do {
+                    try on ? helper.install() : helper.uninstall()
+                } catch {
+                    helperError = "\(error)"
+                }
+            })
     }
 }

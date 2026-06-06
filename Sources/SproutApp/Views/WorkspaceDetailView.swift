@@ -78,6 +78,18 @@ struct WorkspaceDetailView: View {
         } message: {
             Text("This worktree has uncommitted changes. Tear down anyway?")
         }
+        .alert(
+            project.lastError?.title ?? "Something went wrong",
+            isPresented: Binding(
+                get: { project.lastError != nil },
+                set: { if !$0 { project.lastError = nil } })
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let detail = project.lastError?.detail {
+                Text(detail)
+            }
+        }
     }
 
     // MARK: inspector
@@ -119,9 +131,10 @@ struct WorkspaceDetailView: View {
     }
 
     private func field(_ k: String, _ v: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(k).font(.caption2).foregroundStyle(.secondary)
-            Text(v).font(.callout.monospaced())
+        LabeledContent(k) {
+            Text(v)
+                .font(.callout.monospaced())
+                .textSelection(.enabled)
         }
     }
 
@@ -226,9 +239,10 @@ private struct ProcessRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "circle.fill")
-                .font(.system(size: 8))
-                .foregroundStyle(dotColor)
+            Image(systemName: statusSymbol)
+                .font(.system(size: 9))
+                .foregroundStyle(statusColor)
+                .accessibilityLabel("Status: \(statusLabel)")
             Text(proc.name)
             if let port = proc.port {
                 Text(":\(port)")
@@ -241,16 +255,33 @@ private struct ProcessRow: View {
             }
             .buttonStyle(.borderless)
             .help(isRunning ? "Stop" : "Start")
+            .accessibilityLabel(isRunning ? "Stop \(proc.name)" : "Start \(proc.name)")
             .disabled(orphaned)
         }
         .padding(.vertical, 2)
     }
 
-    private var dotColor: Color {
+    private var statusColor: Color {
         switch status {
         case .running: return .green
         case .crashed: return .red
         default: return .secondary
+        }
+    }
+
+    private var statusSymbol: String {
+        switch status {
+        case .running: return "circle.fill"
+        case .crashed: return "exclamationmark.triangle.fill"
+        default: return "circle"
+        }
+    }
+
+    private var statusLabel: String {
+        switch status {
+        case .running: return "Running"
+        case .crashed: return "Crashed"
+        default: return "Stopped"
         }
     }
 }
