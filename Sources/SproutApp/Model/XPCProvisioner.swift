@@ -13,6 +13,9 @@ final class XPCProvisioner: LoopbackProvisioner, @unchecked Sendable {
     /// (see `SproutSigning`). A swapped-out helper binary fails the check.
     private let helperRequirement = SproutSigning.helperRequirement
 
+    // Temporary stub — a later task replaces this with a real XPC call to the helper.
+    func listManaged() async throws -> [String] { [] }
+
     func setActive(ip: String, hosts: [String], active: Bool) async throws {
         let conn = NSXPCConnection(
             machServiceName: sproutHelperMachServiceName,

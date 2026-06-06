@@ -12,6 +12,9 @@ public enum ProvisionError: Error, Equatable {
 /// (follow-up plan); engine and tests depend only on this protocol.
 public protocol LoopbackProvisioner: Sendable {
     func setActive(ip: String, hosts: [String], active: Bool) async throws
+    /// IPs the helper currently manages (its `/etc/hosts` block). Used by the
+    /// launch sweep to find aliases a crashed app left behind.
+    func listManaged() async throws -> [String]
 }
 
 /// Default no-op. Wired into the app until the XPC helper exists, so behavior is
@@ -19,6 +22,7 @@ public protocol LoopbackProvisioner: Sendable {
 public struct NoopLoopbackProvisioner: LoopbackProvisioner {
     public init() {}
     public func setActive(ip: String, hosts: [String], active: Bool) async throws {}
+    public func listManaged() async throws -> [String] { [] }
 }
 
 /// Per-process hostnames for a workspace: `<process>.<project>.localhost` for

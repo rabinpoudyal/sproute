@@ -119,9 +119,11 @@ final class RecordingProvisioner: LoopbackProvisioner, @unchecked Sendable {
     private let lock = NSLock()
     private var _calls: [Call] = []
     private var _failNext = false
+    private var _managed: [String] = []
 
     var calls: [Call] { lock.withLock { _calls } }
     func setFailNext(_ value: Bool) { lock.withLock { _failNext = value } }
+    func setManaged(_ ips: [String]) { lock.withLock { _managed = ips } }
 
     func setActive(ip: String, hosts: [String], active: Bool) async throws {
         let shouldFail = lock.withLock { () -> Bool in
@@ -131,6 +133,10 @@ final class RecordingProvisioner: LoopbackProvisioner, @unchecked Sendable {
             return fail
         }
         if shouldFail { throw ProvisionError.helperUnavailable }
+    }
+
+    func listManaged() async throws -> [String] {
+        lock.withLock { _managed }
     }
 }
 

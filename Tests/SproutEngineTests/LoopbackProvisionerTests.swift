@@ -34,3 +34,9 @@ import Foundation
     try await p.setActive(ip: "127.0.10.1", hosts: ["web.shop.localhost"], active: true)
     try await p.setActive(ip: "127.0.10.1", hosts: ["web.shop.localhost"], active: false)
 }
+
+@Test func noopListManagedReturnsEmpty() async throws {
+    let p = NoopLoopbackProvisioner()
+    let managed = try await p.listManaged()
+    #expect(managed.isEmpty)
+}
