@@ -22,11 +22,12 @@ final class AppModel: ObservableObject {
 
     let helper = HelperManager()
 
-    /// Per-workspace loopback IPs are opt-in until the signed helper ships
-    /// (Plan 2b-3). Off by default keeps production binding 127.0.0.1.
-    var loopbackEnabled: Bool {
-        UserDefaults.standard.bool(forKey: "loopbackEnabled")
-    }
+    /// Per-workspace loopback IPs (127.0.10.N + a privileged helper) are hard
+    /// disabled: they caused more setup friction than the concurrent-same-port
+    /// benefit was worth, especially now the product is moving toward agents.
+    /// Everything binds 127.0.0.1. The loopback/helper code stays in the tree
+    /// (dormant) so this is a one-line revert — flip back to the UserDefaults read.
+    var loopbackEnabled: Bool { false }
 
     init() {
         registry = ProjectRegistry.load(from: SproutPaths.registryFile)

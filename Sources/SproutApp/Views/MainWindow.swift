@@ -84,12 +84,8 @@ struct MainWindow: View {
         }
         .onAppear {
             app.refreshAll()
-            // Prompt to install/enable the loopback helper on first sight if it
-            // isn't already enabled. Dismissible, so dev builds aren't blocked.
-            app.helper.refresh()
-            if app.helper.status != .enabled {
-                showingHelperSetup = true
-            }
+            // Loopback is disabled, so don't nag to install the helper. The setup
+            // sheet stays reachable from Settings if the feature is ever re-enabled.
         }
     }
 }
