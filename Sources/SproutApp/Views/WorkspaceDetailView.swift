@@ -14,13 +14,29 @@ struct WorkspaceDetailView: View {
     @State private var dirtyWarning = false
     @State private var selectedProcess: String?
     @State private var showInspector = true
+    @State private var pane: Pane = .processes
+
+    private enum Pane: Hashable { case processes, agents }
 
     private var rec: WorkspaceRecord { item.record }
     private var processNames: [String] { project.config.run.processes.map(\.name) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            mainContent
+            Picker("", selection: $pane) {
+                Text("Processes").tag(Pane.processes)
+                Text("Agents").tag(Pane.agents)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .padding(8)
+            Divider()
+            if pane == .agents {
+                AgentsPanelView(project: project, item: item)
+            } else {
+                mainContent
+            }
             if drawerVisible {
                 Divider()
                 ShellDrawer(

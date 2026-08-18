@@ -8,15 +8,17 @@ public struct Config: Sendable {
     public var setup: [SetupStep]
     public var run: RunConfig
     public var hooks: HooksConfig
+    /// Claude Code (or other CLI) agents that can be launched inside a workspace.
+    public var agents: [AgentConfig]
 
     public init(
         project: ProjectConfig, worktree: WorktreeConfig,
         env: EnvConfig, database: DatabaseConfig, setup: [SetupStep],
-        run: RunConfig, hooks: HooksConfig
+        run: RunConfig, hooks: HooksConfig, agents: [AgentConfig] = []
     ) {
         self.project = project; self.worktree = worktree
         self.env = env; self.database = database; self.setup = setup
-        self.run = run; self.hooks = hooks
+        self.run = run; self.hooks = hooks; self.agents = agents
     }
 }
 
@@ -66,6 +68,14 @@ public struct ProcessConfig: Sendable, Equatable {
     public var port: Int?  // fixed listen port; nil = process binds no port
     public init(name: String, command: String, port: Int? = nil) {
         self.name = name; self.command = command; self.port = port
+    }
+}
+
+public struct AgentConfig: Sendable, Equatable {
+    public var name: String
+    public var command: String  // template; the CLI agent to launch (default "claude")
+    public init(name: String, command: String = "claude") {
+        self.name = name; self.command = command
     }
 }
 

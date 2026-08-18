@@ -33,3 +33,9 @@ command = "swift build"
 [[run.process]]
 name = "app"
 command = "swift run SproutApp"
+
+# CLI coding agents launchable inside a workspace. Sprout installs its hook
+# config into the worktree so the session reports its state back over loopback.
+[[agent]]
+name = "builder"
+command = "claude"

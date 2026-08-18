@@ -53,6 +53,8 @@ final class ProjectStore: ObservableObject, Identifiable {
     @Published private(set) var consoleSessions: [ConsoleSessionItem] = []
     /// Ordered create-step checklist, updated live while `create` runs.
     @Published private(set) var createProgress: [CreateStep] = []
+    /// Live agents launched in this project's workspaces, keyed for the UI by id.
+    @Published private(set) var agents: [AgentRuntime] = []
 
     private let shell = LoginShellRunner()
     private let renderer = TemplateRenderer()
@@ -73,17 +75,25 @@ final class ProjectStore: ObservableObject, Identifiable {
     private var consoleControllers: [UUID: ConsoleSessionController] = [:]
     private var shellControllers: [String: ConsoleSessionController] = [:]
 
+    /// Loopback receiver for Claude Code hook callbacks. Lazily started on the
+    /// first agent launch; `hookPort` is the bound port once running.
+    private let hookReceiver: AgentHookReceiving
+    private var hookPort: UInt16?
+    private var hookConsumer: Task<Void, Never>?
+
     var name: String { config.project.name }
 
     init(
         rootURL: URL, config: Config,
         loopbackEnabled: Bool = false,
         allocator: IPAllocator? = nil,
-        loopback: LoopbackCoordinator? = nil
+        loopback: LoopbackCoordinator? = nil,
+        hookReceiver: AgentHookReceiving = AgentHookReceiver()
     ) {
         self.rootURL = rootURL.standardizedFileURL
         self.id = self.rootURL.path
         self.config = config
+        self.hookReceiver = hookReceiver
         let store = JSONStateStore(fileURL: SproutPaths.stateFile(projectName: config.project.name))
         self.store = store
         self.manager = ProjectStore.makeManager(
@@ -542,6 +552,108 @@ final class ProjectStore: ObservableObject, Identifiable {
         }
     }
 
+    // MARK: - Agents
+
+    private func agentCommand(for name: String) -> String? {
+        config.agents.first(where: { $0.name == name })?.command
+    }
+
+    /// The SwiftTerm controller for a running agent's PTY, if any.
+    func agentController(id: UUID) -> ConsoleSessionController? {
+        guard let consoleID = agents.first(where: { $0.id == id })?.consoleID else { return nil }
+        return consoleControllers[consoleID]
+    }
+
+    /// Launch a CLI agent (`claude` by default) in the workspace's worktree. Writes
+    /// the Sprout hook config into the worktree so the session reports its state
+    /// back over loopback, then spawns it under a PTY (so it has a TTY and we can
+    /// steer it via stdin later).
+    func startAgent(_ item: WorkspaceItem, name: String) async {
+        guard let command = agentCommand(for: name) else { return }
+        let rec = item.record
+        let branch = rec.branch
+        do {
+            let port = try await ensureHookReceiver()
+            let token = UUID().uuidString
+            try AgentHooksInstaller.install(
+                worktree: URL(fileURLWithPath: rec.worktreePath), port: port, token: token)
+
+            let onExit: @Sendable (UUID, Int32) -> Void = { [weak self] id, _ in
+                Task { @MainActor in self?.handleAgentExit(consoleID: id) }
+            }
+            let session = try await consoleSupervisor.start(
+                branch: branch, name: name, command: command,
+                ctx: context(rec), cwd: URL(fileURLWithPath: rec.worktreePath),
+                env: childEnv(rec), onExit: onExit)
+            consoleControllers[session.id] = ConsoleSessionController(
+                id: session.id, handle: session.handle)
+            agents.append(
+                AgentRuntime(
+                    id: UUID(), branch: branch, name: name, token: token,
+                    consoleID: session.id))
+        } catch {
+            lastError = AppError(error)
+        }
+    }
+
+    /// Stop a running agent: terminate its PTY session and mark it ended. The
+    /// runtime row is kept so its transition log stays readable.
+    func stopAgent(id: UUID) async {
+        guard let i = agents.firstIndex(where: { $0.id == id }) else { return }
+        if let consoleID = agents[i].consoleID {
+            consoleControllers[consoleID]?.stop()
+            consoleControllers[consoleID] = nil
+            await consoleSupervisor.stop(id: consoleID)
+        }
+        agents[i].state = .ended
+        agents[i].currentTool = nil
+    }
+
+    /// Start the loopback hook receiver once and begin consuming deliveries.
+    /// Returns the bound port for building this launch's hook URL.
+    private func ensureHookReceiver() async throws -> UInt16 {
+        if let hookPort { return hookPort }
+        let port = try await hookReceiver.start()
+        hookPort = port
+        // The Task inherits @MainActor from this store, so the stream and applyHook
+        // are same-actor. Capture the stream weakly (no retain cycle), then re-guard
+        // self each iteration.
+        hookConsumer = Task { [weak self] in
+            guard let stream = self?.hookReceiver.deliveries else { return }
+            for await delivery in stream {
+                guard let self else { return }
+                self.applyHook(delivery)
+            }
+        }
+        return port
+    }
+
+    /// Apply one hook delivery: match its token to an agent, record the transition,
+    /// and advance the agent's state via the engine reducer.
+    private func applyHook(_ delivery: HookDelivery) {
+        guard let i = agents.firstIndex(where: { $0.token == delivery.token }) else { return }
+        let event = delivery.event
+        let next = AgentStateReducer.state(for: event, previous: agents[i].state)
+        agents[i].sessionID = event.sessionID
+        agents[i].state = next
+        if event.kind == "PreToolUse" { agents[i].currentTool = event.tool }
+        if event.kind == "PostToolUse" || event.kind == "PostToolUseFailure" {
+            agents[i].currentTool = nil
+        }
+        agents[i].transitions.append(
+            AgentTransition(at: Date(), kind: event.kind, tool: event.tool, state: next))
+    }
+
+    /// The agent's PTY exited (session quit or crashed): mark it ended, drop the
+    /// controller. The runtime row stays so its final transition log is readable.
+    private func handleAgentExit(consoleID: UUID) {
+        consoleControllers[consoleID]?.stop()
+        consoleControllers[consoleID] = nil
+        guard let i = agents.firstIndex(where: { $0.consoleID == consoleID }) else { return }
+        agents[i].state = .ended
+        agents[i].currentTool = nil
+    }
+
     /// The SwiftTerm controller for a branch's drawer shell, if a session is running.
     func shellController(branch: String) -> ConsoleSessionController? {
         shellControllers[branch]
@@ -637,6 +749,7 @@ final class ProjectStore: ObservableObject, Identifiable {
                 consoleControllers[id] = nil
             }
             consoleSessions = consoleSessions.filter { $0.branch != item.record.branch }
+            agents.removeAll { $0.branch == item.record.branch }
             shellControllers[item.record.branch]?.stop()
             shellControllers[item.record.branch] = nil
             try await manager.teardown(

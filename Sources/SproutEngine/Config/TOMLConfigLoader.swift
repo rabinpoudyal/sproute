@@ -85,6 +85,16 @@ public enum TOMLConfigLoader {
             }
         }
 
+        var agents: [AgentConfig] = []
+        if let arr = table["agent"]?.array {
+            for entry in arr {
+                guard let at = entry.table, let name = at["name"]?.string else {
+                    throw ConfigError.missingKey("agent[].name")
+                }
+                agents.append(AgentConfig(name: name, command: at["command"]?.string ?? "claude"))
+            }
+        }
+
         let hooksT = table["hooks"]?.table
         let hooks = HooksConfig(
             preTeardown: hooksT?["pre_teardown"]?.string,
@@ -104,6 +114,6 @@ public enum TOMLConfigLoader {
                 urlTemplate: try str(dbT, "url_template", "database.url_template")),
             setup: steps,
             run: RunConfig(processes: processes, consoles: consoles),
-            hooks: hooks)
+            hooks: hooks, agents: agents)
     }
 }
