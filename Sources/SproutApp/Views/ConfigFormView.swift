@@ -19,192 +19,125 @@ struct ConfigFormView<Extra: View>: View {
 
     @State private var error: String?
     @State private var saved = false
-    @State private var tab: FormTab = .basic
-
-    private enum FormTab: Hashable, CaseIterable {
-        case basic, config, env, hooks
-
-        var title: String {
-            switch self {
-            case .basic: "Basic Info"
-            case .config: "Configurations"
-            case .env: "Environment"
-            case .hooks: "Hooks"
-            }
-        }
-
-        var systemImage: String {
-            switch self {
-            case .basic: "info.circle"
-            case .config: "slider.horizontal.3"
-            case .env: "key"
-            case .hooks: "bolt"
-            }
-        }
-    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            tabBar
-            Divider()
-            content
-        }
-        .safeAreaInset(edge: .bottom) { saveBar }
-    }
-
-    // MARK: preference-style tab bar
-
-    private var tabBar: some View {
-        HStack(spacing: 6) {
-            ForEach(FormTab.allCases, id: \.self) { item in
-                tabButton(item)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(.bar)
-    }
-
-    private func tabButton(_ item: FormTab) -> some View {
-        let selected = tab == item
-        return Button {
-            tab = item
-        } label: {
-            VStack(spacing: 4) {
-                Image(systemName: item.systemImage)
-                    .font(.system(size: 22))
-                    .frame(height: 26)
-                Text(item.title)
-                    .font(.caption)
-            }
-            .frame(width: 96)
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
-            .background {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(selected ? Color.secondary.opacity(0.2) : .clear)
-            }
-            .foregroundStyle(selected ? Color.accentColor : Color.primary)
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder private var content: some View {
-        switch tab {
-        case .basic: basicTab
-        case .config: configTab
-        case .env: envTab
-        case .hooks: hooksTab
-        }
-    }
-
-    // MARK: tabs
-
-    @ViewBuilder private var basicTab: some View {
         Form {
-            Section("Project") {
-                TextField("Name", text: $draft.projectName, prompt: Text("my-app"))
-            }
-            Section("Worktree") {
-                TextField("Base dir", text: $draft.baseDir, prompt: Text("../worktrees"))
-                TextField("Branch prefix", text: $draft.branchPrefix, prompt: Text("feature/"))
-            }
+            projectSection
+            worktreeSection
+            databaseSection
+            setupSection
+            processesSection
+            symlinkSection
+            hooksSection
             extra()
         }
         .formStyle(.grouped)
+        .safeAreaInset(edge: .bottom) { saveBar }
     }
 
-    @ViewBuilder private var configTab: some View {
-        Form {
-            Section("Database") {
-                TextField("Create", text: $draft.dbCreate)
-                TextField("Drop", text: $draft.dbDrop)
-                TextField("URL template", text: $draft.dbURL)
-            }
-            Section("Setup steps") {
-                ForEach($draft.setup) { $step in
-                    HStack {
-                        TextField("name", text: $step.name)
-                            .frame(width: 110)
-                        TextField("command", text: $step.command)
-                            .font(.callout.monospaced())
-                        Button(role: .destructive) {
-                            removeStep(step.id)
-                        } label: {
-                            Image(systemName: "minus.circle")
-                        }
-                        .buttonStyle(.borderless)
-                        .help("Remove step")
+    // MARK: sections (single scrolling inspector, Xcode-style)
+
+    @ViewBuilder private var projectSection: some View {
+        Section("Project") {
+            TextField("Name", text: $draft.projectName, prompt: Text("my-app"))
+        }
+    }
+
+    @ViewBuilder private var worktreeSection: some View {
+        Section("Worktree") {
+            TextField("Base dir", text: $draft.baseDir, prompt: Text("../worktrees"))
+            TextField("Branch prefix", text: $draft.branchPrefix, prompt: Text("feature/"))
+        }
+    }
+
+    @ViewBuilder private var databaseSection: some View {
+        Section("Database") {
+            TextField("Create", text: $draft.dbCreate)
+            TextField("Drop", text: $draft.dbDrop)
+            TextField("URL template", text: $draft.dbURL)
+        }
+    }
+
+    @ViewBuilder private var setupSection: some View {
+        Section("Setup steps") {
+            ForEach($draft.setup) { $step in
+                HStack {
+                    TextField("name", text: $step.name)
+                        .frame(width: 110)
+                    TextField("command", text: $step.command)
+                        .font(.callout.monospaced())
+                    Button(role: .destructive) {
+                        removeStep(step.id)
+                    } label: {
+                        Image(systemName: "minus.circle")
                     }
-                }
-                Button {
-                    draft.setup.append(.init(name: "", command: ""))
-                } label: {
-                    Label("Add step", systemImage: "plus")
+                    .buttonStyle(.borderless)
+                    .help("Remove step")
                 }
             }
-            Section("Run processes") {
-                ForEach($draft.processes) { $proc in
-                    HStack {
-                        TextField("name", text: $proc.name)
-                            .frame(width: 110)
-                        TextField("command", text: $proc.command)
-                            .font(.callout.monospaced())
-                        TextField("port", text: $proc.port)
-                            .frame(width: 60)
-                        Button(role: .destructive) {
-                            removeProcess(proc.id)
-                        } label: {
-                            Image(systemName: "minus.circle")
-                        }
-                        .buttonStyle(.borderless)
-                        .help("Remove process")
+            Button {
+                draft.setup.append(.init(name: "", command: ""))
+            } label: {
+                Label("Add step", systemImage: "plus")
+            }
+        }
+    }
+
+    @ViewBuilder private var processesSection: some View {
+        Section("Run processes") {
+            ForEach($draft.processes) { $proc in
+                HStack {
+                    TextField("name", text: $proc.name)
+                        .frame(width: 110)
+                    TextField("command", text: $proc.command)
+                        .font(.callout.monospaced())
+                    TextField("port", text: $proc.port)
+                        .frame(width: 60)
+                    Button(role: .destructive) {
+                        removeProcess(proc.id)
+                    } label: {
+                        Image(systemName: "minus.circle")
                     }
-                }
-                Button {
-                    draft.processes.append(.init(name: "", command: "", port: ""))
-                } label: {
-                    Label("Add process", systemImage: "plus")
+                    .buttonStyle(.borderless)
+                    .help("Remove process")
                 }
             }
+            Button {
+                draft.processes.append(.init(name: "", command: "", port: ""))
+            } label: {
+                Label("Add process", systemImage: "plus")
+            }
         }
-        .formStyle(.grouped)
     }
 
-    @ViewBuilder private var envTab: some View {
-        Form {
-            Section {
-                ForEach($draft.symlinkSources) { $source in
-                    SymlinkSourceRow(
-                        path: $source.value,
-                        projectRoot: projectRoot,
-                        onDelete: { remove(source.id) })
-                }
-                Button {
-                    draft.symlinkSources.append(.init(value: ""))
-                } label: {
-                    Label("Add source", systemImage: "plus")
-                }
-                TextField("Local file", text: $draft.localFile, prompt: Text(".env.local"))
-            } header: {
-                Text("Symlinked files")
-            } footer: {
-                Text(
-                    "Gitignored secrets identical across branches (e.g. config/master.key). "
-                        + "Missing entries are skipped when linking.")
+    @ViewBuilder private var symlinkSection: some View {
+        Section {
+            ForEach($draft.symlinkSources) { $source in
+                SymlinkSourceRow(
+                    path: $source.value,
+                    projectRoot: projectRoot,
+                    onDelete: { remove(source.id) })
             }
+            Button {
+                draft.symlinkSources.append(.init(value: ""))
+            } label: {
+                Label("Add source", systemImage: "plus")
+            }
+            TextField("Local file", text: $draft.localFile, prompt: Text(".env.local"))
+        } header: {
+            Text("Symlinked files")
+        } footer: {
+            Text(
+                "Gitignored secrets identical across branches (e.g. config/master.key). "
+                    + "Missing entries are skipped when linking.")
         }
-        .formStyle(.grouped)
     }
 
-    @ViewBuilder private var hooksTab: some View {
-        Form {
-            Section("Hooks (optional)") {
-                TextField("Pre-teardown", text: $draft.preTeardown)
-                TextField("Post-teardown", text: $draft.postTeardown)
-            }
+    @ViewBuilder private var hooksSection: some View {
+        Section("Hooks (optional)") {
+            TextField("Pre-teardown", text: $draft.preTeardown)
+            TextField("Post-teardown", text: $draft.postTeardown)
         }
-        .formStyle(.grouped)
     }
 
     // MARK: save bar

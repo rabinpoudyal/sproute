@@ -22,6 +22,25 @@ public struct GitService: Sendable {
         return r
     }
 
+    /// Like `runChecked` but streams output line-by-line to `onLog` (so a slow or
+    /// hanging command shows progress), capturing it for the error on failure.
+    private func runStreamed(
+        _ command: String, cwd: URL, onLog: @Sendable (LogLine) -> Void
+    ) async throws {
+        onLog(LogLine(source: .stdout, text: "$ \(command)"))
+        let handle = try shell.launch(command, cwd: cwd, env: [:])
+        var captured: [String] = []
+        for await line in handle.logs {
+            onLog(line)
+            captured.append(line.text)
+        }
+        let code = await handle.waitForExit()
+        guard code == 0 else {
+            throw GitError.commandFailed(
+                command: command, exitCode: code, stderr: captured.joined(separator: "\n"))
+        }
+    }
+
     public func fetch(repo: URL) async throws {
         try await runChecked("git fetch --all --prune", cwd: repo)
     }
@@ -34,8 +53,16 @@ public struct GitService: Sendable {
             .filter { !$0.isEmpty }
     }
 
-    public func worktreeAdd(repo: URL, path: String, base: String, branch: String) async throws {
-        try await runChecked("git worktree add -b \(q(branch)) \(q(path)) \(q(base))", cwd: repo)
+    public func worktreeAdd(
+        repo: URL, path: String, base: String, branch: String,
+        onLog: (@Sendable (LogLine) -> Void)? = nil
+    ) async throws {
+        let cmd = "git worktree add -b \(q(branch)) \(q(path)) \(q(base))"
+        if let onLog {
+            try await runStreamed(cmd, cwd: repo, onLog: onLog)
+        } else {
+            try await runChecked(cmd, cwd: repo)
+        }
     }
 
     public func worktreeRemove(repo: URL, path: String) async throws {

@@ -1,30 +1,35 @@
+# Sprout dogfooding its own dev workspaces.
+# Each feature branch gets an isolated worktree with its own warm build,
+# running the app from that branch's source.
+
 [project]
-name = "shop"
+name = "sprout"
 
 [worktree]
 base_dir = "../sprout-worktrees"
 branch_prefix = "feature/"
 
+# No per-branch secrets to share. local_file is required by the loader but
+# stays empty/unused for this project.
 [env]
-symlink_sources = [".env"]
+symlink_sources = []
 local_file = ".env.local"
 
+# Sprout keeps no database (state lives in ~/.sprout JSON). The [database]
+# section is mandatory, so wire it to shell no-ops that always succeed.
 [database]
-create_command = "createdb {{db_name}}"
-drop_command = "dropdb --if-exists {{db_name}}"
-url_template = "postgres://localhost/{{db_name}}"
+create_command = "true"
+drop_command = "true"
+url_template = "unused"
 
 [[setup]]
-name = "deps"
-command = "npm ci"
-
-[[setup]]
-name = "migrate"
-command = "npm run migrate"
+name = "build"
+command = "swift build"
 
 [run]
 
+# GUI app: binds no network port (omit `port`). The supervisor captures stdout.
+# Each branch's worktree runs its own SproutApp instance from that source.
 [[run.process]]
-name = "server"
-command = "npm run dev -- --host {{host}} --port {{port}}"
-port = 4000
+name = "app"
+command = "swift run SproutApp"

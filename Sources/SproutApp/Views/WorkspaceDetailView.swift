@@ -344,6 +344,7 @@ struct ProjectOverviewView: View {
     let onNewWorkspace: () -> Void
 
     @StateObject private var draft: ConfigDraft
+    @State private var showInspector = true
 
     init(project: ProjectStore, onNewWorkspace: @escaping () -> Void) {
         self.project = project
@@ -352,44 +353,33 @@ struct ProjectOverviewView: View {
     }
 
     var body: some View {
-        ConfigFormView(
-            draft: draft,
-            projectRoot: project.rootURL,
-            saveTitle: "Save changes",
-            onSave: { try app.saveConfig($0, to: project.rootURL) },
-            extra: { doctorSection }
-        )
-        .navigationTitle(project.name)
-        .navigationSubtitle(project.rootURL.path)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: onNewWorkspace) {
-                    Label("New Workspace", systemImage: "plus")
+        ProjectDashboard(project: project, onNewWorkspace: onNewWorkspace)
+            .navigationTitle(project.name)
+            .navigationSubtitle(project.rootURL.path)
+            .inspector(isPresented: $showInspector) {
+                ConfigFormView(
+                    draft: draft,
+                    projectRoot: project.rootURL,
+                    saveTitle: "Save changes",
+                    onSave: { try app.saveConfig($0, to: project.rootURL) }
+                )
+                .inspectorColumnWidth(min: 280, ideal: 320, max: 480)
+            }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: onNewWorkspace) {
+                        Label("New Workspace", systemImage: "plus")
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showInspector.toggle()
+                    } label: {
+                        Label("Configuration", systemImage: "sidebar.trailing")
+                    }
+                    .help("Toggle configuration")
+                    .accessibilityLabel("Toggle configuration")
                 }
             }
-        }
-    }
-
-    @ViewBuilder private var doctorSection: some View {
-        Section("Doctor") {
-            if project.doctor.isEmpty {
-                Text("Not run yet.").foregroundStyle(.secondary)
-            }
-            ForEach(project.doctor, id: \.tool) { check in
-                HStack {
-                    Image(
-                        systemName: check.found
-                            ? "checkmark.circle.fill" : "xmark.circle.fill"
-                    )
-                    .foregroundStyle(check.found ? Color.green : Color.red)
-                    Text(check.tool).bold()
-                    Text(check.path ?? "not found")
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-            }
-            Button("Run Doctor") { Task { await project.runDoctor() } }
-        }
     }
 }

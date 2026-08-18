@@ -30,7 +30,19 @@ let package = Package(
         .target(name: "CSproutXPC"),
         .executableTarget(
             name: "SproutHelper",
-            dependencies: ["SproutEngine", "CSproutXPC"]
+            dependencies: ["SproutEngine", "CSproutXPC"],
+            // SMAppService registers this as a *bare-executable* LaunchDaemon, so
+            // launchd reads its Info.plist from an embedded `__TEXT,__info_plist`
+            // section rather than a bundle. Without it the daemon's CFBundleIdentifier
+            // can't be resolved and launchd refuses to spawn with EX_CONFIG (78).
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", "packaging/HelperInfo.plist",
+                ])
+            ]
         ),
         .executableTarget(
             name: "SproutApp",

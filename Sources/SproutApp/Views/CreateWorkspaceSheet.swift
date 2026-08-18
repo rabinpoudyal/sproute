@@ -23,42 +23,86 @@ struct CreateWorkspaceSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("New Workspace in \(project.name)").font(.title3.bold())
-
+        NavigationStack {
             Form {
-                TextField("Branch", text: $branch, prompt: Text("feature/login"))
-                    .disabled(creating)
-                TextField("Base branch", text: $base)
-                    .disabled(creating)
-                LabeledContent("Database", value: dbPreview)
-                LabeledContent("Ports", value: portSummary)
-                LabeledContent("Worktree", value: worktreePreview)
+                Section {
+                    TextField("Branch", text: $branch, prompt: Text("feature/login"))
+                        .disabled(creating)
+                    TextField("Base branch", text: $base)
+                        .disabled(creating)
+                }
+                if creating {
+                    Section("Progress") {
+                        ForEach(project.createProgress) { step in
+                            HStack(spacing: 10) {
+                                stepIcon(step.state)
+                                    .frame(width: 16)
+                                Text(step.label)
+                                    .foregroundStyle(step.state == .pending ? .secondary : .primary)
+                                Spacer()
+                            }
+                        }
+                    }
+                } else {
+                    Section("Preview") {
+                        LabeledContent("Database", value: dbPreview)
+                        LabeledContent("Ports", value: portSummary)
+                        LabeledContent("Worktree", value: worktreePreview)
+                    }
+                }
+                if let err = project.lastError {
+                    Section {
+                        ErrorBanner(error: err)
+                    }
+                }
             }
             .formStyle(.grouped)
-
-            if creating {
-                Text("Setting up…").font(.caption).foregroundStyle(.secondary)
-                LogConsoleView(buffer: project.logBuffer(branch: branch, process: "setup"))
-                    .frame(height: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            .safeAreaInset(edge: .bottom) {
+                if creating {
+                    logPane
+                }
             }
-
-            if let err = project.lastError {
-                ErrorBanner(error: err)
-            }
-
-            HStack {
-                Button("Cancel") { dismiss() }.disabled(creating)
-                Spacer()
-                if creating { ProgressView().controlSize(.small) }
-                Button("Create") { create() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(branch.isEmpty || base.isEmpty || creating)
+            .navigationTitle("New Workspace")
+            .navigationSubtitle(project.name)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(creating)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if creating {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button("Create") { create() }
+                            .keyboardShortcut(.defaultAction)
+                            .disabled(branch.isEmpty || base.isEmpty)
+                    }
+                }
             }
         }
-        .padding()
-        .frame(width: 480)
+        .frame(width: 480, height: creating ? 580 : 380)
+        .onAppear { project.lastError = nil }
+    }
+
+    private var logPane: some View {
+        VStack(spacing: 0) {
+            Divider()
+            LogConsoleView(buffer: project.logBuffer(branch: branch, process: "setup"))
+                .frame(height: 180)
+        }
+    }
+
+    @ViewBuilder private func stepIcon(_ state: CreateStepState) -> some View {
+        switch state {
+        case .pending:
+            Image(systemName: "circle").foregroundStyle(.secondary)
+        case .running:
+            ProgressView().controlSize(.small)
+        case .done:
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        case .failed:
+            Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+        }
     }
 
     private func create() {

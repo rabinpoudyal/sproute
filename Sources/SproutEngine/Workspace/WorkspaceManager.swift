@@ -77,6 +77,9 @@ public struct WorkspaceManager: Sendable {
         log: @escaping @Sendable (_ stream: String, LogLine) -> Void,
         onProcessExit: @escaping @Sendable (_ name: String, _ pid: Int32, _ code: Int32) -> Void = {
             _, _, _ in
+        },
+        progress: @escaping @Sendable (_ phase: CreatePhase, _ state: CreateStepState) -> Void = {
+            _, _ in
         }
     ) async throws -> WorkspaceRecord {
         let slug = TemplateContext.slugify(branch)
@@ -96,10 +99,17 @@ public struct WorkspaceManager: Sendable {
         // Track what to roll back, in reverse order.
         var didWorktree = false, didDB = false
         var startedProcesses: [ProcessState] = []
+        // The phase in flight, so the catch can mark exactly which step failed.
+        var currentPhase: CreatePhase = .worktree
 
         do {
-            try await git.worktreeAdd(repo: repo, path: worktreePath, base: base, branch: branch)
+            currentPhase = .worktree
+            progress(.worktree, .running)
+            try await git.worktreeAdd(
+                repo: repo, path: worktreePath, base: base, branch: branch,
+                onLog: { log("setup", $0) })
             didWorktree = true
+            progress(.worktree, .done)
 
             let plan = portPlan(config.run.processes)
             let port = primaryPort(config.run.processes)
@@ -107,9 +117,15 @@ public struct WorkspaceManager: Sendable {
                 config: config, branch: branch, port: port, ports: plan,
                 dbName: dbName, worktree: worktreePath, host: bindIP)
 
-            try await database.create(config.database, ctx: ctx, cwd: repo)
+            currentPhase = .database
+            progress(.database, .running)
+            try await database.create(
+                config.database, ctx: ctx, cwd: repo, onLog: { log("setup", $0) })
             didDB = true
+            progress(.database, .done)
 
+            currentPhase = .environment
+            progress(.environment, .running)
             try envLinker.link(
                 sources: config.env.symlinkSources,
                 primaryRepo: repo, worktree: worktreeURL)
@@ -117,6 +133,7 @@ public struct WorkspaceManager: Sendable {
             try envLinker.writeLocal(
                 file: config.env.localFile, worktree: worktreeURL,
                 port: port, databaseURL: dbURL)
+            progress(.environment, .done)
 
             var record = WorkspaceRecord(
                 id: UUID(), branch: branch, base: base, worktreePath: worktreePath,
@@ -132,9 +149,12 @@ public struct WorkspaceManager: Sendable {
             ]
             try await setupRunner.run(
                 config.setup, ctx: ctx, cwd: worktreeURL,
-                env: childEnv, onLog: { log("setup", $0) })
+                env: childEnv, onLog: { log("setup", $0) },
+                onStep: { name, state in progress(.setup(name), state) })
 
             for proc in config.run.processes {
+                currentPhase = .process(proc.name)
+                progress(.process(proc.name), .running)
                 let ownPort = proc.port ?? port
                 let pctx = context(
                     config: config, branch: branch, port: ownPort, ports: plan,
@@ -152,12 +172,19 @@ public struct WorkspaceManager: Sendable {
                     cwd: worktreeURL, env: penv, onLog: { log(name, $0) },
                     onExit: { pid, code in onProcessExit(name, pid, code) })
                 startedProcesses.append(ProcessState(name: proc.name, pid: pid, status: .running))
+                progress(.process(proc.name), .done)
             }
             record.processes = startedProcesses
             record.status = aggregateStatus(startedProcesses)
             try store.upsert(record)
             return record
         } catch {
+            // SetupRunner already marked the failing setup step; for the other
+            // phases mark whichever was in flight when the throw happened.
+            if case SetupError.stepFailed = error {
+            } else {
+                progress(currentPhase, .failed)
+            }
             for proc in startedProcesses {
                 if let pid = proc.pid {
                     await terminator.terminate(pid: pid, graceSeconds: 5)

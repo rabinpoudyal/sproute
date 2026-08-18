@@ -52,6 +52,15 @@ struct MainWindow: View {
             HelperSetupSheet()
         }
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    presentAddProjectPanel(app)
+                } label: {
+                    Image(systemName: "folder.badge.plus")
+                }
+                .help("Add Project")
+                .accessibilityLabel("Add Project")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     app.refreshAll()
@@ -171,6 +180,11 @@ struct SidebarView: View {
                         .buttonStyle(.borderless)
                         .help("New workspace in \(project.name)")
                         .accessibilityLabel("New workspace in \(project.name)")
+                    }
+                    .contextMenu {
+                        Button("Remove Project", role: .destructive) {
+                            app.removeProject(project)
+                        }
                     }
                 }
             }

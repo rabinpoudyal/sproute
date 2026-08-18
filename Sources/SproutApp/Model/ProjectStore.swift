@@ -9,6 +9,22 @@ struct WorkspaceItem: Identifiable, Equatable {
     var id: UUID { record.id }
 }
 
+/// One row in the create-progress checklist shown by the new-workspace sheet.
+struct CreateStep: Identifiable, Equatable {
+    let id: String
+    let label: String
+    var state: CreateStepState
+}
+
+/// Thrown when a create sub-step exceeds its time budget (e.g. an unresponsive
+/// loopback helper), so the create fails with a clear message instead of hanging.
+struct CreateTimeout: LocalizedError {
+    var errorDescription: String? {
+        "Timed out waiting for the loopback helper. Enable it in Settings, or turn off "
+            + "per-branch loopback, then try again."
+    }
+}
+
 /// One running interactive console, for display in the detail view and process list.
 struct ConsoleSessionItem: Identifiable, Equatable {
     let id: UUID
@@ -35,6 +51,8 @@ final class ProjectStore: ObservableObject, Identifiable {
     @Published private(set) var doctor: [ToolCheck] = []
     @Published var lastError: AppError?
     @Published private(set) var consoleSessions: [ConsoleSessionItem] = []
+    /// Ordered create-step checklist, updated live while `create` runs.
+    @Published private(set) var createProgress: [CreateStep] = []
 
     private let shell = LoginShellRunner()
     private let renderer = TemplateRenderer()
@@ -248,10 +266,72 @@ final class ProjectStore: ObservableObject, Identifiable {
         try? await allocator.release(project: config.project.name, branch: branch)
     }
 
+    /// The planned, ordered create steps (all pending). Mirrors the phases
+    /// `WorkspaceManager.create` reports, so the checklist shows every step up front.
+    private func plannedCreateSteps() -> [CreateStep] {
+        var steps: [CreateStep] = []
+        if loopbackEnabled {
+            steps.append(
+                CreateStep(id: "loopback", label: "Provision loopback alias", state: .pending))
+        }
+        steps += [
+            CreateStep(id: "worktree", label: "Create worktree", state: .pending),
+            CreateStep(id: "database", label: "Provision database", state: .pending),
+            CreateStep(id: "environment", label: "Link environment", state: .pending),
+        ]
+        steps += config.setup.map {
+            CreateStep(id: "setup:\($0.name)", label: $0.name, state: .pending)
+        }
+        steps += config.run.processes.map {
+            CreateStep(id: "process:\($0.name)", label: "Start \($0.name)", state: .pending)
+        }
+        return steps
+    }
+
+    private func phaseID(_ phase: CreatePhase) -> String {
+        switch phase {
+        case .loopback: return "loopback"
+        case .worktree: return "worktree"
+        case .database: return "database"
+        case .environment: return "environment"
+        case .setup(let name): return "setup:\(name)"
+        case .process(let name): return "process:\(name)"
+        }
+    }
+
+    private func updateCreateProgress(_ phase: CreatePhase, _ state: CreateStepState) {
+        let id = phaseID(phase)
+        if let i = createProgress.firstIndex(where: { $0.id == id }) {
+            createProgress[i].state = state
+        }
+    }
+
+    /// Runs `op`, throwing `CreateTimeout` if it doesn't finish within `seconds`.
+    /// Guards the loopback XPC call so an unresponsive helper can't hang `create`
+    /// indefinitely (it surfaces a clear error instead).
+    private func withCreateTimeout<T: Sendable>(
+        seconds: Double, _ op: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await op() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw CreateTimeout()
+            }
+            defer { group.cancelAll() }
+            return try await group.next()!
+        }
+    }
+
     func create(base: String, branch: String) async {
         // Route each stream ("setup" + per-process) to its own buffer so the detail
         // view's per-process consoles show create-time output, not just an unseen
         // "create" buffer.
+        createProgress = plannedCreateSteps()
+        let onProgress: @Sendable (CreatePhase, CreateStepState) -> Void = {
+            [weak self] phase, state in
+            Task { @MainActor in self?.updateCreateProgress(phase, state) }
+        }
         createLogTail = []
         let route: @Sendable (String, LogLine) -> Void = { [weak self] stream, line in
             Task { @MainActor in
@@ -277,18 +357,38 @@ final class ProjectStore: ObservableObject, Identifiable {
             // match the per-process release in handleProcessExit (alias drops on
             // the last process out). Abort the create if provisioning fails.
             let procCount = config.run.processes.count
+            if loopbackEnabled {
+                onProgress(.loopback, .running)
+                route(
+                    "setup",
+                    LogLine(
+                        source: .stdout,
+                        text: "Provisioning loopback alias \(bindIP) via helper…"))
+            }
             do {
                 for _ in 0..<procCount {
-                    try await activateLoopback(branch: branch, ip: bindIP)
+                    try await withCreateTimeout(seconds: 15) { [self] in
+                        try await activateLoopback(branch: branch, ip: bindIP)
+                    }
                 }
+                if loopbackEnabled { onProgress(.loopback, .done) }
             } catch {
+                if loopbackEnabled {
+                    onProgress(.loopback, .failed)
+                    route(
+                        "setup",
+                        LogLine(
+                            source: .stderr,
+                            text: "Loopback provisioning failed: \(error.localizedDescription)"))
+                }
                 await releaseBindIP(branch: branch)
                 throw error
             }
             do {
                 _ = try await manager.create(
                     config: config, repo: rootURL,
-                    base: base, branch: branch, bindIP: bindIP, log: route, onProcessExit: onExit)
+                    base: base, branch: branch, bindIP: bindIP, log: route,
+                    onProcessExit: onExit, progress: onProgress)
             } catch {
                 // manager.create rolls back and terminates any started processes
                 // directly (no onProcessExit fires), so undo the activations here.
