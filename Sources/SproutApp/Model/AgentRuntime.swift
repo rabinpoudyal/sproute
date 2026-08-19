@@ -22,6 +22,7 @@ struct AgentRuntime: Identifiable, Equatable {
     var sessionID: String?
     var state: AgentState = .idle
     var currentTool: String?
+    var startedAt: Date = Date()
     var transitions: [AgentTransition] = []
 
     /// `branch/name`, the human label for this agent.

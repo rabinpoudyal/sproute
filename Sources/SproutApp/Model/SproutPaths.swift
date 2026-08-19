@@ -10,6 +10,17 @@ enum SproutPaths {
         root.appendingPathComponent("projects.json")
     }
 
+    /// Directory holding per-project configs, kept in the home dir (not the repo)
+    /// so a project's Sprout config is never shared with collaborators.
+    static var configsDir: URL {
+        root.appendingPathComponent("configs")
+    }
+
+    /// A project's config file, scoped by a slug of its `[project] name`.
+    static func configFile(projectName: String) -> URL {
+        configsDir.appendingPathComponent("\(slugify(projectName)).toml")
+    }
+
     /// Global loopback IP allocation table (127.0.10.N per project/branch).
     static var loopbackFile: URL {
         root.appendingPathComponent("loopback.json")

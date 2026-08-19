@@ -61,11 +61,11 @@ struct AgentsPanelView: View {
             ForEach(agents) { agent in
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(color(agent.state))
+                        .fill(AgentStyle.color(agent.state))
                         .frame(width: 8, height: 8)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(agent.name)
-                        Text(stateText(agent))
+                        Text(AgentStyle.label(agent))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -93,7 +93,8 @@ struct AgentsPanelView: View {
                     .frame(minHeight: 120)
                 }
                 Divider()
-                transitionLog(agent)
+                AgentTransitionLog(transitions: agent.transitions)
+                    .frame(minHeight: 100)
             }
         } else {
             ContentUnavailableView(
@@ -102,58 +103,4 @@ struct AgentsPanelView: View {
         }
     }
 
-    private func transitionLog(_ agent: AgentRuntime) -> some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 2) {
-                ForEach(agent.transitions.reversed()) { t in
-                    HStack(spacing: 8) {
-                        Text(Self.time.string(from: t.at))
-                            .foregroundStyle(.secondary)
-                        Text(t.kind)
-                        if let tool = t.tool {
-                            Text("(\(tool))").foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(t.state.rawValue)
-                            .foregroundStyle(color(t.state))
-                    }
-                    .font(.caption.monospaced())
-                }
-            }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(minHeight: 100)
-    }
-
-    // MARK: styling
-
-    private func stateText(_ agent: AgentRuntime) -> String {
-        switch agent.state {
-        case .runningTool:
-            return agent.currentTool.map { "running \($0)" } ?? "running tool"
-        case .waitingApproval:
-            return "waiting for approval"
-        default:
-            return agent.state.rawValue
-        }
-    }
-
-    private func color(_ state: AgentState) -> Color {
-        switch state {
-        case .idle: return .secondary
-        case .thinking: return .blue
-        case .runningTool: return .purple
-        case .waitingApproval: return .orange
-        case .done: return .green
-        case .error: return .red
-        case .ended: return .gray
-        }
-    }
-
-    private static let time: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm:ss"
-        return f
-    }()
 }

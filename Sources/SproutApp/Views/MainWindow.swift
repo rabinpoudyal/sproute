@@ -4,6 +4,7 @@ import ServiceManagement
 import SproutEngine
 
 enum SidebarSelection: Hashable {
+    case agentWorld
     case projectRoot(projectID: String)
     case workspace(projectID: String, id: UUID)
 }
@@ -63,6 +64,15 @@ struct MainWindow: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
+                    selection = .agentWorld
+                } label: {
+                    Image(systemName: "person.2.badge.gearshape")
+                }
+                .help("Show Agent World")
+                .accessibilityLabel("Show Agent World")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
                     app.refreshAll()
                 } label: {
                     Image(systemName: "arrow.clockwise")
@@ -99,7 +109,7 @@ func presentAddProjectPanel(_ app: AppModel) {
     panel.canChooseFiles = false
     panel.allowsMultipleSelection = false
     panel.prompt = "Add Project"
-    panel.message = "Choose a folder containing a .sprout.toml"
+    panel.message = "Choose a project folder with a .sprout.toml to import into ~/.sprout"
     if panel.runModal() == .OK, let url = panel.url {
         app.addProject(url)
     }
@@ -119,6 +129,9 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: $selection) {
+            NavigationLink(value: SidebarSelection.agentWorld) {
+                Label("Agent World", systemImage: "person.2.badge.gearshape")
+            }
             if app.projects.isEmpty {
                 ContentUnavailableView {
                     Label("No Projects", systemImage: "leaf")
@@ -208,6 +221,8 @@ struct DetailContainer: View {
 
     var body: some View {
         switch selection {
+        case .agentWorld:
+            AgentWorldView()
         case let .workspace(projectID, id):
             if let project = app.projects.first(where: { $0.id == projectID }),
                 let item = project.workspaces.first(where: { $0.id == id })

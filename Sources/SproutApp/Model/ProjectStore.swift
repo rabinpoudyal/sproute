@@ -596,6 +596,13 @@ final class ProjectStore: ObservableObject, Identifiable {
         }
     }
 
+    /// Steer a running agent by writing to its PTY (a prompt, or an accept
+    /// keystroke). No-op if the agent has no live console.
+    func sendAgentInput(id: UUID, _ text: String) {
+        guard let consoleID = agents.first(where: { $0.id == id })?.consoleID else { return }
+        consoleControllers[consoleID]?.sendInput(text)
+    }
+
     /// Stop a running agent: terminate its PTY session and mark it ended. The
     /// runtime row is kept so its transition log stays readable.
     func stopAgent(id: UUID) async {

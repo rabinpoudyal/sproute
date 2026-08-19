@@ -38,6 +38,12 @@ final class ConsoleSessionController: NSObject, TerminalViewDelegate {
         pumpTask?.cancel()
     }
 
+    /// Programmatically write to the pty — the same path as user keystrokes. Used
+    /// to steer an agent (e.g. send a prompt or an accept keystroke).
+    func sendInput(_ text: String) {
+        handle.send(Data(text.utf8))
+    }
+
     // MARK: TerminalViewDelegate
     //
     // The protocol requirements are `nonisolated`, so these methods must be too.

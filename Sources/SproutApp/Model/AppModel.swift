@@ -4,6 +4,14 @@ import SproutEngine
 
 enum AggregateStatus { case idle, running, error }
 
+/// One agent plus the project it belongs to, for the app-wide Agent World view.
+struct WorldAgent: Identifiable {
+    let projectID: String
+    let projectName: String
+    let agent: AgentRuntime
+    var id: UUID { agent.id }
+}
+
 /// Top-level app state: the set of registered projects plus add/remove and
 /// aggregate status for the menu-bar icon.
 @MainActor
@@ -49,19 +57,16 @@ final class AppModel: ObservableObject {
 
     func loadProjects() {
         var stores: [ProjectStore] = []
-        for path in registry.projectPaths {
-            let root = URL(fileURLWithPath: path)
-            let configURL = root.appendingPathComponent(".sprout.toml")
-            guard let config = try? TOMLConfigLoader.load(path: configURL) else { continue }
-            let coordinator =
-                loopbackEnabled
-                ? LoopbackCoordinator(provisioner: XPCProvisioner())
-                : nil
+        for ref in registry.projects {
+            // Config lives in the home dir, keyed by name — never read from the repo.
+            let configURL = SproutPaths.configFile(projectName: ref.name)
+            guard !ref.name.isEmpty,
+                let config = try? TOMLConfigLoader.load(path: configURL)
+            else { continue }
             stores.append(
                 ProjectStore(
-                    rootURL: root, config: config,
-                    loopbackEnabled: loopbackEnabled,
-                    loopback: coordinator))
+                    rootURL: URL(fileURLWithPath: ref.path), config: config,
+                    loopbackEnabled: loopbackEnabled))
         }
         projects = stores
         storeSubscriptions = stores.map { store in
@@ -72,15 +77,24 @@ final class AppModel: ObservableObject {
         for p in projects { p.refresh() }
     }
 
+    /// Import an existing project: read its repo `.sprout.toml` once and copy it
+    /// into the home config dir, then register {path, name}. This is the only path
+    /// that touches a repo config — steady-state loading is home-only.
     func addProject(_ url: URL) {
         let configURL = url.appendingPathComponent(".sprout.toml")
-        guard FileManager.default.fileExists(atPath: configURL.path) else {
-            registryError = "No .sprout.toml found in \(url.lastPathComponent)."
+        guard let config = try? TOMLConfigLoader.load(path: configURL) else {
+            registryError =
+                "No .sprout.toml in \(url.lastPathComponent). Use New Project to author one."
             return
         }
-        registry.add(url.path)
-        do { try registry.save(to: SproutPaths.registryFile) } catch { registryError = "\(error)" }
-        loadProjects()
+        do {
+            try writeHomeConfig(config)
+            registry.add(path: url.path, name: config.project.name)
+            try registry.save(to: SproutPaths.registryFile)
+            loadProjects()
+        } catch {
+            registryError = "\(error)"
+        }
     }
 
     func removeProject(_ store: ProjectStore) {
@@ -89,26 +103,57 @@ final class AppModel: ObservableObject {
         loadProjects()
     }
 
-    /// Write an edited config back to a project's `.sprout.toml`, then reload so the
-    /// engine picks up the new settings. Throws on a write failure (shown by the form).
+    /// Write an edited config back to the home config dir, then reload. Also
+    /// updates the registry name in case the project was renamed. Throws on failure.
     func saveConfig(_ config: Config, to root: URL) throws {
-        let url = root.appendingPathComponent(".sprout.toml")
-        try TOMLConfigWriter.serialize(config).write(to: url, atomically: true, encoding: .utf8)
-        loadProjects()
-    }
-
-    /// Author a brand-new project: write its `.sprout.toml`, register the folder,
-    /// then load it. Throws on a write failure.
-    func createProject(at root: URL, config: Config) throws {
-        let url = root.appendingPathComponent(".sprout.toml")
-        try TOMLConfigWriter.serialize(config).write(to: url, atomically: true, encoding: .utf8)
-        registry.add(root.path)
+        try writeHomeConfig(config)
+        registry.add(path: root.path, name: config.project.name)
         try registry.save(to: SproutPaths.registryFile)
         loadProjects()
     }
 
+    /// Author a brand-new project: write its config to the home dir, register the
+    /// folder + name, then load it. Throws on a write failure.
+    func createProject(at root: URL, config: Config) throws {
+        try writeHomeConfig(config)
+        registry.add(path: root.path, name: config.project.name)
+        try registry.save(to: SproutPaths.registryFile)
+        loadProjects()
+    }
+
+    /// Serialize a config to `~/.sprout/configs/<name>.toml`, creating the dir.
+    private func writeHomeConfig(_ config: Config) throws {
+        let url = SproutPaths.configFile(projectName: config.project.name)
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try TOMLConfigWriter.serialize(config).write(to: url, atomically: true, encoding: .utf8)
+    }
+
     func refreshAll() {
         for p in projects { p.refresh() }
+    }
+
+    // MARK: - Agents (app-wide)
+
+    func project(id: String) -> ProjectStore? {
+        projects.first { $0.id == id }
+    }
+
+    /// Every launched agent across all projects, for the Agent World view.
+    func allAgents() -> [WorldAgent] {
+        projects.flatMap { store in
+            store.agents.map {
+                WorldAgent(projectID: store.id, projectName: store.name, agent: $0)
+            }
+        }
+    }
+
+    func sendAgentInput(projectID: String, agentID: UUID, _ text: String) {
+        project(id: projectID)?.sendAgentInput(id: agentID, text)
+    }
+
+    func stopAgent(projectID: String, agentID: UUID) async {
+        await project(id: projectID)?.stopAgent(id: agentID)
     }
 
     var aggregateStatus: AggregateStatus {

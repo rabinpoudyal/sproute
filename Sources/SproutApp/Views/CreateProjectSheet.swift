@@ -52,8 +52,8 @@ struct CreateProjectSheet: View {
 
     private func create(_ config: Config) throws {
         guard let folder else { throw CreateProjectError.noFolder }
-        let existing = folder.appendingPathComponent(".sprout.toml")
-        if FileManager.default.fileExists(atPath: existing.path) {
+        let home = SproutPaths.configFile(projectName: config.project.name)
+        if FileManager.default.fileExists(atPath: home.path) {
             throw CreateProjectError.alreadyExists
         }
         try app.createProject(at: folder, config: config)
@@ -70,7 +70,7 @@ private enum CreateProjectError: LocalizedError {
         case .noFolder:
             return "Choose the project folder first."
         case .alreadyExists:
-            return "That folder already has a .sprout.toml — use “Add Project” instead."
+            return "A project with that name already exists in ~/.sprout/configs."
         }
     }
 }
